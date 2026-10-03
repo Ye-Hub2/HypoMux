@@ -300,6 +300,172 @@ jobs:
           $env:HYPOMUX_SIGNED_INSTALLER_TEST = (Resolve-Path "${{ env.INSTALLER_PATH }}").Path
           go -C desktop test ./internal/services -run TestVerifyDownloadedInstallerAuthenticityAcceptsOfficialSignedInstaller -count=1 -v
 
+      - name: Assemble portable package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+          # Resolve every path against the repository root captured at start-up: .NET APIs
+          # such as [System.IO.File] use the process working directory, which is not
+          # guaranteed to follow PowerShell's current location.
+          $repoRoot = (Get-Location).Path
+          Write-Host "Repository root: $repoRoot"
+
+          $versionFile = Join-Path $repoRoot 'desktop\VERSION'
+          if (-not (Test-Path -LiteralPath $versionFile)) {
+            throw "desktop\VERSION not found under $repoRoot; run this step from the repository root."
+          }
+          $version = [System.IO.File]::ReadAllText($versionFile).Trim()
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw 'desktop\VERSION is empty; cannot derive the portable package version.'
+          }
+
+          # Sources: build output (desktop\bin) plus the tracked runtime binaries (bin\) and
+          # the tracked launcher assets (desktop\portable). Fail fast with an exact path if
+          # anything the package needs is missing.
+          $binarySources = @(
+            (Join-Path $repoRoot 'desktop\bin\hypomux.exe'),
+            (Join-Path $repoRoot 'desktop\bin\hypomux-engine.exe'),
+            (Join-Path $repoRoot 'bin\sing-box.exe'),
+            (Join-Path $repoRoot 'bin\wintun.dll'),
+            (Join-Path $repoRoot 'bin\libcronet.dll')
+          )
+          $assets = @(
+            @{ Source = (Join-Path $repoRoot 'desktop\portable\launch-portable.cmd');     Name = '启动便携版.cmd' },
+            @{ Source = (Join-Path $repoRoot 'desktop\portable\restore-environment.cmd'); Name = '恢复环境.cmd' },
+            @{ Source = (Join-Path $repoRoot 'desktop\portable\PORTABLE-README.txt');     Name = '便携版说明.txt' }
+          )
+          foreach ($source in @($binarySources) + @($assets | ForEach-Object { $_.Source })) {
+            if (-not (Test-Path -LiteralPath $source)) {
+              throw "Portable package source is missing: $source"
+            }
+          }
+
+          $stageName = "HypoMux-Portable-$version-vnic-preview"
+          $outDir = Join-Path $repoRoot 'portable-package'
+          $stage = Join-Path $outDir $stageName
+          $binDir = Join-Path $stage 'bin'
+          $zipPath = Join-Path $outDir "$stageName.zip"
+
+          if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+          if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+          New-Item -ItemType Directory -Path $binDir -Force | Out-Null
+
+          # The layout below is fixed by the application code: keep the engine and its
+          # sidecar DLLs inside bin\. desktop\internal\engineclient\service_windows.go:73-91
+          # (allowAutomaticCoreFallbackPath) uses os.SameFile to require the fallback engine
+          # to be exactly <dir(hypomux.exe)>\bin\hypomux-engine.exe, so flattening bin\ makes
+          # the elevated Core fallback fail whenever the HypoMuxCore service is stopped.
+          # sing-box.exe/wintun.dll/libcronet.dll must stay next to hypomux-engine.exe
+          # because the engine resolves sing-box from its own directory and sing-box loads
+          # wintun.dll from there.
+          Copy-Item -LiteralPath $binarySources[0] -Destination (Join-Path $stage 'hypomux.exe') -Force
+          foreach ($binary in @($binarySources[1..4])) {
+            Copy-Item -LiteralPath $binary -Destination $binDir -Force
+          }
+
+          # The user-facing launch assets are stored with ASCII names in the repository and
+          # only get their Chinese package names here.
+          foreach ($asset in $assets) {
+            Copy-Item -LiteralPath $asset.Source -Destination (Join-Path $stage $asset.Name) -Force
+          }
+
+          $required = @(
+            'hypomux.exe',
+            'bin\hypomux-engine.exe',
+            'bin\sing-box.exe',
+            'bin\wintun.dll',
+            'bin\libcronet.dll',
+            '启动便携版.cmd',
+            '恢复环境.cmd',
+            '便携版说明.txt'
+          )
+          $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $stage $_)) })
+          if ($missing.Count -gt 0) {
+            throw "Portable package is incomplete, missing: $($missing -join ', ')."
+          }
+
+          # SHA256SUMS.txt covers every staged file. It is written as UTF-8 without BOM so
+          # the checksums stay parsable by both Windows and Linux tooling.
+          $stageRoot = (Resolve-Path -LiteralPath $stage).Path
+          $sumsPath = Join-Path $stage 'SHA256SUMS.txt'
+          $sumLines = Get-ChildItem -LiteralPath $stage -Recurse -File |
+            Where-Object { $_.FullName -ne $sumsPath } |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = $_.FullName.Substring($stageRoot.Length).TrimStart('\') -replace '\\', '/'
+              $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $relative"
+            }
+          [System.IO.File]::WriteAllText($sumsPath, (($sumLines -join "`n") + "`n"), [System.Text.UTF8Encoding]::new($false))
+
+          # Zip with System.IO.Compression, never Compress-Archive: Compress-Archive has a
+          # history of mangling non-ASCII entry names, while .NET writes non-ASCII names as
+          # UTF-8 and sets the language-encoding flag. Entries are added one by one instead
+          # of with ZipFile::CreateFromDirectory because that helper stores the Windows path
+          # separator, and a backslash in an entry name violates the ZIP spec (APPNOTE 4.4.17
+          # requires forward slashes): tools that treat "\" as a literal file name character
+          # (bsdtar, Info-ZIP) would flatten bin\ into the package root and break the
+          # launcher. The package layout is part of the contract, so the separators are
+          # normalized here and verified below.
+          $archive = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+          try {
+            foreach ($file in Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName) {
+              $entryName = $file.FullName.Substring($stageRoot.Length).TrimStart('\') -replace '\\', '/'
+              $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+              $entryStream = $entry.Open()
+              try {
+                $fileStream = [System.IO.File]::OpenRead($file.FullName)
+                try { $fileStream.CopyTo($entryStream) } finally { $fileStream.Dispose() }
+              } finally {
+                $entryStream.Dispose()
+              }
+            }
+          } finally {
+            $archive.Dispose()
+          }
+
+          $zipCheck = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $badEntries = @($zipCheck.Entries | Where-Object { $_.FullName -like '*\*' })
+            if ($badEntries.Count -gt 0) {
+              throw "Zip entry names must use forward slashes, found: $($badEntries[0].FullName)"
+            }
+            if ($zipCheck.Entries.Count -ne $required.Count + 1) {
+              throw "Unexpected zip entry count: $($zipCheck.Entries.Count) (expected $($required.Count + 1))."
+            }
+          } finally {
+            $zipCheck.Dispose()
+          }
+
+          $stageBytes = (Get-ChildItem -LiteralPath $stage -Recurse -File | Measure-Object -Property Length -Sum).Sum
+          Write-Host "Portable package stage: $stageRoot ($stageBytes bytes)"
+          Write-Host "Portable package zip  : $zipPath ($((Get-Item -LiteralPath $zipPath).Length) bytes)"
+          Write-Host 'Staged files:'
+          Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName | ForEach-Object {
+            Write-Host ("  {0,12}  {1}" -f $_.Length, $_.FullName.Substring($stageRoot.Length).TrimStart('\'))
+          }
+          Write-Host 'Zip entries:'
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $zip.Entries | Sort-Object FullName | ForEach-Object {
+              Write-Host ("  {0,12}  {1}" -f $_.Length, $_.FullName)
+            }
+          } finally {
+            $zip.Dispose()
+          }
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@v7
+        with:
+          name: HypoMux-Portable-Windows-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            portable-package/*.zip
+            portable-package/*/SHA256SUMS.txt
+          if-no-files-found: error
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:

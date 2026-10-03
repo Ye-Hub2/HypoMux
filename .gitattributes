@@ -11,6 +11,11 @@
 *.html text eol=lf
 *.sh text eol=lf
 
+# The portable launchers and readme are checked out with CRLF: the .cmd scripts
+# are CRLF sensitive and the Windows runners do not guarantee core.autocrlf.
+*.cmd text eol=crlf
+desktop/portable/*.txt text eol=crlf
+
 *.png binary
 *.jpg binary
 *.ico binary

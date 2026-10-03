@@ -60,6 +60,9 @@ pnpm-debug.log*
 /desktop/build/tray-review/
 /desktop/build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 
+# Portable package staging directory assembled by .github/workflows/build.yml
+/portable-package/
+
 # Local dependency/tool sandboxes
 /.appdata/
 /.tools/
