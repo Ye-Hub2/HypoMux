@@ -1,0 +1,148 @@
+/* Page-local styling for VirtualAdaptersPage. app.css is off-limits (owned by
+   another change), so the shell layout values are mirrored from
+   .blocked-domains-page (app.css:4772-4781) rather than re-declared there.
+   The .virtual-adapters-* rules below mirror .blocked-toolbar/.blocked-list
+   (app.css:5197-5230). */
+.virtual-adapters-page {
+  width: min(100%, 1180px);
+  height: 100%;
+  margin: 0 auto;
+  padding: calc(18px * var(--hm-density-space));
+  overflow: auto;
+}
+
+.virtual-adapters-surface {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--hm-density-space));
+}
+
+.virtual-adapters-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(10px * var(--hm-density-space));
+}
+
+.virtual-adapters-toolbar > div {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--hm-density-space));
+}
+
+.virtual-adapters-toolbar > div:first-child span {
+  color: var(--hm-text-secondary, inherit);
+  font-size: 0.92em;
+}
+
+.virtual-adapters-banner {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--hm-density-space));
+  padding: calc(8px * var(--hm-density-space)) calc(12px * var(--hm-density-space));
+  border: 1px solid var(--hm-border-subtle, rgba(127, 127, 127, 0.24));
+  border-radius: calc(8px * var(--hm-density-space));
+  background: var(--hm-surface-muted, rgba(127, 127, 127, 0.08));
+}
+
+.virtual-adapters-restart {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--hm-density-space));
+  padding: calc(8px * var(--hm-density-space)) calc(12px * var(--hm-density-space));
+  border: 1px solid var(--hm-warning-border, rgba(196, 89, 17, 0.28));
+  border-radius: calc(8px * var(--hm-density-space));
+  background: var(--hm-warning-surface, rgba(196, 89, 17, 0.08));
+  color: var(--hm-text-primary, inherit);
+  font-size: 0.92em;
+}
+
+.virtual-adapters-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(10px * var(--hm-density-space));
+  padding: calc(28px * var(--hm-density-space));
+  text-align: center;
+  color: var(--hm-text-secondary, inherit);
+}
+
+.virtual-adapters-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--hm-density-space));
+}
+
+.virtual-adapters-row {
+  display: grid;
+  /* name / MAC+address / switch / badges+actions */
+  grid-template-columns: minmax(140px, 0.65fr) minmax(220px, 1.4fr) minmax(100px, 0.55fr) minmax(260px, 1.6fr);
+  align-items: center;
+  gap: calc(10px * var(--hm-density-space));
+  padding: calc(8px * var(--hm-density-space)) calc(10px * var(--hm-density-space));
+  border: 1px solid var(--hm-border-subtle, rgba(127, 127, 127, 0.2));
+  border-radius: calc(8px * var(--hm-density-space));
+}
+
+.virtual-adapters-row.is-header {
+  padding-block: 0;
+  border: 0;
+  color: var(--hm-text-secondary, inherit);
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.virtual-adapters-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.virtual-adapters-row small {
+  color: var(--hm-text-secondary, inherit);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+.virtual-adapters-row-actions {
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(8px * var(--hm-density-space));
+  justify-content: flex-end;
+}
+
+.virtual-adapter-error {
+  flex-basis: 100%;
+  color: var(--hm-danger-foreground, #b10e1c);
+}
+
+.virtual-adapter-fields {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--hm-density-space));
+}
+
+.virtual-adapter-hint,
+.virtual-adapter-intro {
+  color: var(--hm-text-secondary, inherit);
+  font-size: 0.9em;
+}
+
+@media (max-width: 900px) {
+  .virtual-adapters-row {
+    grid-template-columns: 1fr;
+  }
+
+  .virtual-adapters-row.is-header {
+    display: none;
+  }
+
+  .virtual-adapters-row-actions {
+    justify-content: flex-start;
+  }
+}

@@ -1,10 +1,10 @@
 import * as AdapterService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/adapterservice";
 import * as DiagnosticsService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/diagnosticsservice";
 import * as EngineService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/engineservice";
+import * as HyperVAdapterService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/hypervadapterservice";
 import * as RoutingRuleService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/routingruleservice";
 import * as SettingsService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/settingsservice";
 import * as TunService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/tunservice";
-import * as VirtualAdapterService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/virtualadapterservice";
 import { Call } from "@wailsio/runtime";
 import type {
   AppSettings,
@@ -12,6 +12,8 @@ import type {
   DiagnosticResult,
   DiagnosticSnapshot,
   EngineSnapshot as GeneratedEngineSnapshot,
+  HyperVAdapterStatus as GeneratedHyperVAdapterStatus,
+  HyperVSwitch as GeneratedHyperVSwitch,
   RunningProcess,
   RoutingBatchPreview,
   RoutingRule,
@@ -21,7 +23,6 @@ import type {
   SupportLogSnapshot,
   TunPreflightIssue,
   TunPreflightSnapshot,
-  VirtualAdapterStatus as GeneratedVirtualAdapterStatus,
 } from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/models";
 
 export type {
@@ -67,10 +68,13 @@ export type RoutingSnapshot = Omit<GeneratedRoutingSnapshot, "match_order" | "re
 
 export type AdapterView = GeneratedAdapterView & { is_virtual?: boolean };
 
-// The generated model already carries the exact camelCase field names the virtual
-// adapter UI consumes (state/interfaceName/address/prefixLength/mtu/adapterGuid/
-// createdAt/lastError), so the alias only keeps pages off the generated path.
-export type VirtualAdapterStatus = GeneratedVirtualAdapterStatus;
+// The generated models already carry the exact camelCase field names the virtual
+// adapter UI consumes (reports/vnic/70-frozen-hyperv-interface.md §3.2 freezes
+// name/interfaceName/adapterId/macAddress/switchName/state/address/prefixLength/
+// gateway/managed/inPool/batchId/createdAt/lastError), so the aliases only keep
+// pages off the generated path.
+export type HyperVAdapterStatus = GeneratedHyperVAdapterStatus;
+export type HyperVSwitch = GeneratedHyperVSwitch;
 
 export type CompleteAppSettings = AppSettings & {
   update_channel?: "stable" | "preview";
@@ -268,6 +272,16 @@ export async function withServiceTimeout<T>(
   }
 }
 
+// withServiceTimeout only rejects the awaiter — the underlying Wails call keeps running.
+// Hyper-V create() therefore needs a budget that covers the elevated runas child (UAC
+// prompt + Hyper-V module load, both unbounded) plus the 60s DHCP wait from
+// reports/vnic/70-frozen-hyperv-interface.md §3.5; a short budget would report failure
+// while the batch is still being created and push the user into the §3.7 per-batch cap.
+// 180s = 60s DHCP + headroom for UAC/module load. Over-long only delays the error message.
+export const HYPERV_ADAPTER_READ_TIMEOUT_MS = 10_000;
+export const HYPERV_ADAPTER_WRITE_TIMEOUT_MS = 60_000;
+export const HYPERV_ADAPTER_CREATE_TIMEOUT_MS = 180_000;
+
 // Pages never import generated Wails bindings directly. This facade keeps the
 // desktop transport replaceable and gives browser-only visual QA an explicit,
 // visibly disconnected fixture rather than pretending a real core is running.
@@ -347,10 +361,14 @@ export const appServices = {
     latest: () => TunService.Latest(),
     preflight: (adapterIDs: string[]) => TunService.Preflight(adapterIDs),
   },
-  virtualAdapter: {
-    create: (interfaceName: string, address: string) => VirtualAdapterService.Create(interfaceName, address),
-    status: () => VirtualAdapterService.Status(),
-    remove: () => VirtualAdapterService.Remove(),
+  // Host-side Hyper-V ManagementOS virtual adapters, verbatim per
+  // reports/vnic/70-frozen-hyperv-interface.md §4. Timeouts are the call site's job —
+  // see HYPERV_ADAPTER_*_TIMEOUT_MS above for why create() needs the long one.
+  virtualAdapters: {
+    list: () => HyperVAdapterService.List(),
+    switches: () => HyperVAdapterService.Switches(),
+    create: (switchName: string, count: number) => HyperVAdapterService.Create(switchName, count),
+    remove: (name: string) => HyperVAdapterService.Remove(name),
   },
   settings: {
     get: async () => (await SettingsService.Get()) as CompleteAppSettings,

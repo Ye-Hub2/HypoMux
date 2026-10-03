@@ -147,13 +147,15 @@ func main() {
 		},
 		supportLogs,
 	)
-	virtualAdapterService := services.NewVirtualAdapterService(engineService)
+	hypervAdapterService := services.NewHyperVAdapterService(settingsService, adapterService)
 	var diagnosticsService *services.DiagnosticsService
 	desktop := wails.NewDesktopHost(app, mainWindow, startSilent, func() {
 		if diagnosticsService != nil {
 			diagnosticsService.Shutdown()
 		}
-		virtualAdapterService.Shutdown()
+		// 必须排在 engineService.Shutdown() 之前：Hyper-V 侧还有 DHCP 等待与出口池写入
+		// 在飞，先停它才不会在引擎已经拆掉之后再动网卡设置（reports/vnic/70 §3.9）。
+		hypervAdapterService.Shutdown()
 		engineService.Shutdown()
 	}, func() bool {
 		return settingsService.Get().CloseToTray
@@ -185,7 +187,7 @@ func main() {
 	app.RegisterService(application.NewService(diagnosticsService))
 	app.RegisterService(application.NewService(services.NewMTUService(engineService, settingsService)))
 	app.RegisterService(application.NewService(tunService))
-	app.RegisterService(application.NewService(virtualAdapterService))
+	app.RegisterService(application.NewService(hypervAdapterService))
 	app.RegisterService(application.NewService(blockedDomainService))
 	app.RegisterService(application.NewService(updaterService))
 	app.RegisterService(application.NewService(appearanceService))

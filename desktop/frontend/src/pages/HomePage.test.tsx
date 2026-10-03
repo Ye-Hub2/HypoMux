@@ -330,3 +330,16 @@ describe("HomePage adapter interactions", () => {
     await expect(result!).resolves.toBe(false);
   });
 });
+
+// The Wintun adapter was retired in T-C2: Hyper-V management adapters moved to
+// the standalone VirtualAdaptersPage. Guard the removal so the old card cannot
+// creep back onto the home page (it would poll appServices.virtualAdapter,
+// which the Go side no longer backs with a UI).
+describe("HomePage virtual NIC cleanup", () => {
+  it("no longer mounts the retired Wintun virtual adapter card", () => {
+    renderPage(<HomePage />);
+    expect(screen.queryByText("Virtual adapter")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create virtual adapter" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove virtual adapter" })).toBeNull();
+  });
+});

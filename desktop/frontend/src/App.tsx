@@ -31,6 +31,7 @@ const HealthPage = lazy(() => import("./pages/HealthPage").then((module) => ({ d
 const ConnectionsPage = lazy(() => import("./pages/ConnectionsPage").then((module) => ({ default: module.ConnectionsPage })));
 const RoutingPage = lazy(() => import("./pages/RoutingPage").then((module) => ({ default: module.RoutingPage })));
 const ToolsPage = lazy(() => import("./pages/ToolsPage").then((module) => ({ default: module.ToolsPage })));
+const VirtualAdaptersPage = lazy(() => import("./pages/VirtualAdaptersPage").then((module) => ({ default: module.VirtualAdaptersPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 
 function NotificationVisualFixture() {
@@ -68,7 +69,8 @@ function HypoMuxWindow() {
     const requested = new URLSearchParams(window.location.search).get("page");
     if (import.meta.env.DEV && (
       requested === "tools" || requested === "appearance" || requested === "routing" ||
-      requested === "health" || requested === "connections" || requested === "settings" ||
+      requested === "health" || requested === "connections" || requested === "virtual-adapters" ||
+      requested === "settings" ||
       requested === "blocked-domains" || requested === "about"
     )) {
       return requested;
@@ -87,6 +89,7 @@ function HypoMuxWindow() {
     "routing",
     "health",
     "connections",
+    "virtual-adapters",
     "tools",
     "settings",
     "blocked-domains",
@@ -163,6 +166,8 @@ function HypoMuxWindow() {
                   adapterRevision={connectionsNavigation.revision}
                   adapterRuntime={connectionAdapters ?? []}
                 />
+            : target === "virtual-adapters"
+                ? <VirtualAdaptersPage />
             : target === "routing"
               ? <RoutingPage />
               : null}

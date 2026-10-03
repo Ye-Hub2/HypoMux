@@ -23,7 +23,6 @@ import { useEngineState, type EnginePhase, type HomeAdapter } from "../state/use
 import { EngineHero } from "../components/home/EngineHero";
 import { NetworkAdapterItem } from "../components/home/NetworkAdapterItem";
 import { RuntimeStatusBar } from "../components/home/RuntimeStatusBar";
-import { VirtualAdapterPanel } from "../components/vnic/VirtualAdapterPanel";
 import type { AppPage } from "../components/shell/CompactNavigation";
 import type { TunPreflightSnapshot } from "../platform/services";
 import { useI18n } from "../i18n/i18n";
@@ -64,14 +63,6 @@ export function HomePage({
       dedupeKey: informational ? "home:engine-info" : "home:engine-error",
     });
   }, [locale, notify, t]);
-  const notifySuccess = useCallback((message: string) => {
-    notify({
-      title: t("infobar_success"),
-      message,
-      intent: "success",
-      dedupeKey: "home:vnic-success",
-    });
-  }, [notify, t]);
   const handleTunPreflight = useCallback((snapshot: TunPreflightSnapshot) => {
     if (canDismissStartupWarnings(snapshot) && startupWarningsDismissedToday()) {
       return Promise.resolve(true);
@@ -245,13 +236,6 @@ export function HomePage({
           ))}
         </div>
       </section>
-
-      <VirtualAdapterPanel
-        locale={locale}
-        text={text}
-        notifySuccess={notifySuccess}
-        notifyError={notifyError}
-      />
 
       <RuntimeStatusBar strategy={engine.strategy}
         phase={engine.phase}

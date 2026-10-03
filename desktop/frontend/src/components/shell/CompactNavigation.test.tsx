@@ -14,6 +14,7 @@ it("lists every network entry and no AI entry", () => {
   expect(screen.getByRole("button", { name: "nav_routing" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "nav_tools" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Connections" })).toBeTruthy();
+expect(screen.getByRole("button", { name: "nav_virtual_adapters" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Toolbox" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "nav_settings" })).toBeTruthy();
 });
