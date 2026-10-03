@@ -632,8 +632,6 @@ func TestHomeEngineStatePersistsAcrossPageNavigation(t *testing.T) {
 		`onAdapterRuntimeChange={setConnectionAdapters}`,
 		`adapterRuntime={connectionAdapters}`,
 		`hidden={page !== persistentPage}`,
-		`page !== persistentPage && page !== "assistant" ? (`,
-		`hidden={aiEnabled === true && page === "assistant"}`,
 	} {
 		if !strings.Contains(appSource+shellSource, required) {
 			t.Fatalf("persistent home-page state wiring is missing %q", required)

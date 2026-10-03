@@ -1,0 +1,13 @@
+/* Virtual adapter (VNIC) panel. Feature-local styles, imported by
+ * VirtualAdapterPanel.tsx the same way pages/mtu.css is imported by its page.
+ * Only classes owned by this panel live here; surfaces reuse .hm-card. */
+.virtual-adapter-section { display: flex; min-height: 0; flex-direction: column; }
+.virtual-adapter-body { display: grid; min-height: 132px; align-content: center; justify-items: center; gap: 8px; padding: 16px 18px; border: 1px solid var(--hm-outer-border); border-radius: var(--hm-radius); background: color-mix(in srgb, var(--hm-row-hover) 36%, transparent); text-align: center; }
+.virtual-adapter-body > span { font-size: 12px; line-height: 1.6; color: var(--hm-text-tertiary); }
+.virtual-adapter-details { display: grid; gap: 4px; text-align: left; font-size: 12px; line-height: 1.6; color: var(--hm-text-tertiary); font-variant-numeric: tabular-nums; }
+.virtual-adapter-details strong { color: var(--hm-text-primary); font-weight: 600; overflow-wrap: anywhere; }
+.virtual-adapter-hint { font-size: 12px; line-height: 1.6; color: var(--hm-text-tertiary); }
+.virtual-adapter-intro { display: block; margin-bottom: 10px; font-size: 12px; line-height: 1.6; color: var(--hm-text-tertiary); }
+.virtual-adapter-error { font-size: 12px; line-height: 1.6; color: var(--hm-danger); overflow-wrap: anywhere; }
+.virtual-adapter-fields { display: grid; gap: 10px; }
+.virtual-adapter-fields .fui-Input { width: 100%; min-width: 0; }

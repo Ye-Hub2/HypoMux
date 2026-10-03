@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 	"github.com/Hypostasis-Cat/HypoMux/engine/internal/proxy"
 	engineRuntime "github.com/Hypostasis-Cat/HypoMux/engine/internal/runtime"
 	"github.com/Hypostasis-Cat/HypoMux/engine/internal/tun"
+	"github.com/Hypostasis-Cat/HypoMux/engine/internal/vnic"
 	"github.com/Hypostasis-Cat/HypoMux/engine/internal/wfp"
 )
 
@@ -39,6 +41,15 @@ type tunController interface {
 	SetHandlers(func(string), func(tun.Status))
 }
 
+// vnicManager owns an auxiliary Wintun adapter that is kept alive by its own
+// keeper process. It is deliberately independent of tunController: the virtual
+// adapter survives main TUN deactivation and is removed only by vnic.remove.
+type vnicManager interface {
+	Create(context.Context, vnic.Meta) (vnic.Status, error)
+	Status() vnic.Status
+	Remove(context.Context) (vnic.Status, error)
+}
+
 type Server struct {
 	input               io.Reader
 	encoder             *json.Encoder
@@ -47,6 +58,7 @@ type Server struct {
 	runtime             *engineRuntime.Runtime
 	proxy               *proxy.Server
 	tun                 tunController
+	vnic                vnicManager
 	adapters            []wfp.Adapter
 	dnsExemption        wfp.DNSExemption
 	mode                string
@@ -71,6 +83,10 @@ func New(input io.Reader, output io.Writer, metadata Metadata) *Server {
 		tun:       tun.NewSupervisor(),
 	}
 	server.tun.SetHandlers(server.handleTunLog, server.handleTunUnexpectedExit)
+	// The virtual adapter keeper needs its own supervisor: reusing the main TUN
+	// supervisor would tie the adapter to the main lifecycle and leak its
+	// configuration into the main readiness checks.
+	server.vnic = vnic.NewManager(tun.NewSupervisor(), server.handleVnicLog, nil)
 	return server
 }
 
@@ -205,6 +221,12 @@ func (s *Server) handle(ctx context.Context, line []byte) (protocol.Response, bo
 		return protocol.Result(request.ID, s.tun.Status()), false
 	case api.MethodTunDeactivate:
 		return s.deactivateTun(ctx, request.ID), false
+	case api.MethodVNICCreate:
+		return s.createVNIC(ctx, request), false
+	case api.MethodVNICStatus:
+		return s.statusVNIC(request.ID), false
+	case api.MethodVNICRemove:
+		return s.removeVNIC(ctx, request.ID), false
 	case api.MethodDNSResolve:
 		return s.resolveDNS(ctx, request), false
 	case api.MethodDNSStatus:
@@ -786,9 +808,174 @@ func (s *Server) deactivateTun(
 	})
 }
 
+// createVNIC brings up an auxiliary Wintun adapter that is kept alive by its own
+// keeper process. It is idempotent: repeating the same request while the adapter
+// is present is a no-op, and a request that changes the adapter replaces it.
+func (s *Server) createVNIC(
+	ctx context.Context,
+	request protocol.Request,
+) protocol.Response {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if !s.identity.Elevated {
+		return protocol.Failure(
+			request.ID,
+			"elevation_required",
+			"创建虚拟网卡需要管理员 Core",
+			nil,
+		)
+	}
+	var params api.VNICCreateParams
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		return protocol.Failure(
+			request.ID,
+			"invalid_params",
+			"virtual adapter params are not valid JSON",
+			nil,
+		)
+	}
+	if err := validateVNICCreate(params); err != nil {
+		return protocol.Failure(request.ID, "invalid_params", err.Error(), nil)
+	}
+	config := params.Config()
+	config.InterfaceName = params.InterfaceName
+	// Reuse the managed TUN authorization path: the requested adapter keeper must
+	// run the Core-pinned sing-box executable and, when that executable is
+	// pinned, a config whose digest is pinned too.
+	authorized, err := s.authorizeTunConfig(config)
+	if err != nil {
+		return protocol.Failure(
+			request.ID,
+			"security_policy_rejected",
+			"virtual adapter executable is not authorized by the Core security policy",
+			map[string]any{"message": err.Error()},
+		)
+	}
+	meta := vnic.Meta{
+		Executable:     authorized.Executable,
+		ConfigPath:     authorized.ConfigPath,
+		ConfigSHA256:   authorized.ConfigSHA256,
+		StartupTimeout: authorized.StartupTimeout,
+		InterfaceName:  params.InterfaceName,
+		Address:        params.Address,
+		PrefixLength:   params.PrefixLength,
+		MTU:            params.MTU,
+	}
+	status, err := s.vnic.Create(ctx, meta)
+	// A keeper can leave a half-created Wintun adapter behind when it dies during
+	// startup. The manager tears the previous keeper down before every create, so
+	// repeating the request once is enough to recover.
+	if err != nil && isStaleVNICAdapterError(err) {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		_, cleanupErr := s.vnic.Remove(cleanupCtx)
+		cleanupCancel()
+		if cleanupErr == nil {
+			status, err = s.vnic.Create(ctx, meta)
+			if err != nil {
+				err = errors.Join(errors.New("stale virtual adapter retry failed"), err)
+			}
+		} else {
+			err = errors.Join(errors.New("stale virtual adapter retry cleanup failed"), cleanupErr)
+		}
+	}
+	if err != nil {
+		return protocol.Failure(
+			request.ID,
+			"tun_failed",
+			"could not create the virtual adapter",
+			map[string]any{"message": err.Error(), "vnic": vnicStatus(status)},
+		)
+	}
+	return protocol.Result(request.ID, api.VNICCreateResult{
+		Accepted: true,
+		VNIC:     vnicStatus(status),
+	})
+}
+
+func (s *Server) statusVNIC(requestID string) protocol.Response {
+	return protocol.Result(requestID, vnicStatus(s.vnic.Status()))
+}
+
+// removeVNIC stops the existing keeper process. The virtual adapter exists only
+// while that process is alive, so stopping it removes the adapter. It is
+// idempotent and reports absent, not an error, when no adapter exists.
+func (s *Server) removeVNIC(ctx context.Context, requestID string) protocol.Response {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	status, err := s.vnic.Remove(ctx)
+	if err != nil {
+		return protocol.Failure(
+			requestID,
+			"stop_failed",
+			"could not remove the virtual adapter",
+			map[string]any{"message": err.Error(), "vnic": vnicStatus(status)},
+		)
+	}
+	return protocol.Result(requestID, vnicStatus(status))
+}
+
+// validateVNICCreate rejects adapter requests the engine cannot honour before
+// any privileged work happens.
+func validateVNICCreate(params api.VNICCreateParams) error {
+	if strings.TrimSpace(params.InterfaceName) == "" {
+		return errors.New("virtual adapter name is required")
+	}
+	address := net.ParseIP(strings.TrimSpace(params.Address))
+	if address == nil || address.To4() == nil {
+		return errors.New("virtual adapter address must be a valid IPv4 address")
+	}
+	if params.PrefixLength < 1 || params.PrefixLength > 32 {
+		return errors.New("virtual adapter prefix length must be between 1 and 32")
+	}
+	if params.MTU < 576 || params.MTU > 65535 {
+		return errors.New("virtual adapter MTU must be between 576 and 65535")
+	}
+	return nil
+}
+
+// vnicStatus maps the engine-side virtual adapter status onto the transport DTO.
+func vnicStatus(status vnic.Status) api.VNICStatus {
+	var createdAt string
+	if !status.CreatedAt.IsZero() {
+		createdAt = status.CreatedAt.UTC().Format(time.RFC3339)
+	}
+	return api.VNICStatus{
+		State:         status.State,
+		InterfaceName: status.InterfaceName,
+		Address:       status.Address,
+		PrefixLength:  status.PrefixLength,
+		MTU:           status.MTU,
+		AdapterGUID:   status.AdapterGUID,
+		CreatedAt:     createdAt,
+		LastError:     status.LastError,
+	}
+}
+
+// isStaleVNICAdapterError reports Wintun startup failures that leave an adapter
+// behind. The Wintun message only says that an adapter already exists without
+// naming it, so a message that explicitly names the main TUN adapter must not
+// be claimed here; the main adapter owns its own recovery path.
+func isStaleVNICAdapterError(err error) bool {
+	if err == nil || !isStaleTunAdapterError(err) {
+		return false
+	}
+	value := strings.ToLower(err.Error())
+	managed := strings.ToLower(tun.ManagedInterfaceName)
+	virtual := strings.ToLower(tun.VNICInterfaceName)
+	return !(strings.Contains(value, managed) && !strings.Contains(value, virtual))
+}
+
 func (s *Server) handleTunLog(message string) {
 	_ = s.emitEvent(api.EventLogRecord, api.LogRecordData{
 		Component: "sing-box",
+		Message:   message,
+	})
+}
+
+// handleVnicLog forwards virtual adapter keeper output to the host log stream.
+func (s *Server) handleVnicLog(message string) {
+	_ = s.emitEvent(api.EventLogRecord, api.LogRecordData{
+		Component: "vnic-keeper",
 		Message:   message,
 	})
 }
@@ -830,6 +1017,14 @@ func (s *Server) stopProxyForHostExit() {
 	tunCancel()
 	s.activeTunGeneration = 0
 	_ = s.closeDNSExemption()
+	// The virtual adapter keeper is a separate process with its own supervisor.
+	// It is stopped only after the main TUN lifecycle, and before the Core
+	// process exits, so no Wintun-owning sidecar outlives the Core.
+	if s.vnic != nil {
+		vnicCtx, vnicCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		_, _ = s.vnic.Remove(vnicCtx)
+		vnicCancel()
+	}
 	if s.proxy != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = s.proxy.Stop(ctx)

@@ -19,7 +19,6 @@ HypoMux balances independent connections; it does not split one TCP connection a
 
 ## What's new in 2.7.0
 
-- **AI assistant and Mux**: An integrated tool-calling assistant, local MCP connections, and image, layered, and Live2D companion skins.
 - **Hotspot and diagnostics**: Experimental Windows aggregation hotspot, Wi-Fi QR codes, device details, and MTU probing/restoration.
 - **Scheduling and routing**: Adaptive speed, latency-first scheduling, reject rules, and Clash/sing-box rule-set subscriptions.
 - **Reliability and updates**: Improved Steam optimization, TUN startup, and FakeIP caching; bundled sing-box 1.14.2; stable/preview update channels.
@@ -57,7 +56,7 @@ The official Windows releases of HypoMux are built from this repository through 
 
 ### Privacy policy
 
-HypoMux does not sell personal data or upload telemetry by default. Requested features communicate with network services to forward traffic, check the official signed update channel, download installers, and validate connectivity. The optional built-in AI assistant sends conversations and necessary tool results to the model API configured by the user. Enabling external MCP makes selected data available to the connected AI client. Diagnostics are redacted by default, but application names, adapter identifiers, routing values, and manually entered text can contain personal information. API credentials and conversation history are encrypted locally. See [AI assistant and external MCP](docs/AI_ASSISTANT.md) for scope and limitations.
+HypoMux does not sell personal data or upload telemetry by default. Requested features communicate with network services to forward traffic, check the official signed update channel, download installers, and validate connectivity. Diagnostics are redacted by default, but application names, adapter identifiers, routing values, and manually entered text can contain personal information.
 
 ---
 

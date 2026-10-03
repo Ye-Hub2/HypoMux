@@ -1,6 +1,5 @@
 import { Tooltip } from "@fluentui/react-components";
 import {
-  Chat24Regular,
   Beaker24Regular,
   BranchFork24Regular,
   HeartPulse24Regular,
@@ -14,16 +13,14 @@ import {
 import { useLayoutEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/i18n";
 
-export type AppPage = "assistant" | "tools" | "home" | "routing" | "health" | "connections" | "settings" | "blocked-domains" | "about" | "appearance";
+export type AppPage = "tools" | "home" | "routing" | "health" | "connections" | "settings" | "blocked-domains" | "about" | "appearance";
 
 export function CompactNavigation({
   page,
   onPageChange,
-  aiEnabled = true,
 }: {
   page: AppPage;
   onPageChange: (page: AppPage) => void;
-  aiEnabled?: boolean;
 }) {
   const { locale, t } = useI18n();
   const navigationRef = useRef<HTMLElement>(null);
@@ -32,7 +29,6 @@ export function CompactNavigation({
   const navigationPage = page === "blocked-domains" ? "settings" : page;
   const mainItems = [
     { id: "home", label: t("nav_home"), icon: <Home24Regular />, activeIcon: <Home24Filled /> },
-    { id: "assistant", label: locale === "en" ? "AI assistant" : "AI 助手", icon: <Chat24Regular /> },
     { id: "routing", label: t("nav_routing"), icon: <BranchFork24Regular /> },
     { id: "health", label: t("nav_tools"), icon: <HeartPulse24Regular /> },
     { id: "connections", label: locale === "en" ? "Connections" : "活动连接", icon: <PlugConnected24Regular /> },
@@ -62,7 +58,7 @@ export function CompactNavigation({
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateIndicator);
     };
-  }, [navigationPage, aiEnabled]);
+  }, [navigationPage]);
 
   return (
     <nav ref={navigationRef} className="compact-navigation" aria-label={locale === "en" ? "Main navigation" : "主导航"}
@@ -83,7 +79,7 @@ export function CompactNavigation({
         aria-hidden="true"
       />
       <div className="nav-items">
-        {mainItems.filter(item => item.id !== "assistant" || aiEnabled).map((item) => {
+        {mainItems.map((item) => {
           const active = item.id === navigationPage;
           return (
             <Tooltip

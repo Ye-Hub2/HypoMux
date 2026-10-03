@@ -15,9 +15,11 @@ import (
 	"time"
 
 	api "github.com/Hypostasis-Cat/HypoMux/engine/internal/api/v1"
+	"github.com/Hypostasis-Cat/HypoMux/engine/internal/platform"
 	"github.com/Hypostasis-Cat/HypoMux/engine/internal/protocol"
 	engineRuntime "github.com/Hypostasis-Cat/HypoMux/engine/internal/runtime"
 	"github.com/Hypostasis-Cat/HypoMux/engine/internal/tun"
+	"github.com/Hypostasis-Cat/HypoMux/engine/internal/vnic"
 )
 
 func TestDNSDiagnosticTimeoutDoesNotBlockFollowingRPC(t *testing.T) {
@@ -1015,4 +1017,298 @@ func resultObject(t *testing.T, message map[string]any) map[string]any {
 		t.Fatalf("result = %#v", message["result"])
 	}
 	return result
+}
+
+func newVNICLifecycleServer(t *testing.T) (*Server, *fakeTunController) {
+	t.Helper()
+	engineServer := New(strings.NewReader(""), &bytes.Buffer{}, testTunMetadata())
+	engineServer.identity = platform.Identity{Elevated: true}
+	controller := &fakeTunController{status: tun.Status{State: tun.StateStopped}}
+	engineServer.vnic = vnic.NewManager(controller, engineServer.handleVnicLog, nil)
+	return engineServer, controller
+}
+
+func vnicCreateRequest(id string, params string) []byte {
+	return []byte(`{
+		"protocol":1,
+		"id":"` + id + `",
+		"method":"vnic.create",
+		"params":` + params + `
+	}`)
+}
+
+const testVNICCreateParams = `{
+	"executable":"C:\\HypoMux\\bin\\sing-box.exe",
+	"config_path":"C:\\Users\\Example\\.hypomux\\vnic-config.json",
+	"startup_timeout_ms":20000,
+	"interface_name":"HypoMux-VNIC",
+	"address":"10.66.0.1",
+	"prefix_length":24,
+	"mtu":1420
+}`
+
+func TestServerCreatesVirtualAdapterIdempotently(t *testing.T) {
+	engineServer, controller := newVNICLifecycleServer(t)
+	response, shutdown := engineServer.handle(
+		context.Background(),
+		vnicCreateRequest("vnic-create", testVNICCreateParams),
+	)
+	if shutdown {
+		t.Fatal("vnic.create must not request host shutdown")
+	}
+	if response.Error != nil {
+		t.Fatalf("vnic.create failed: %#v", response.Error)
+	}
+	result, ok := response.Result.(api.VNICCreateResult)
+	if !ok {
+		t.Fatalf("result = %#v", response.Result)
+	}
+	if !result.Accepted || result.VNIC.State != vnic.StatePresent {
+		t.Fatalf("result = %#v", result)
+	}
+	if result.VNIC.InterfaceName != "HypoMux-VNIC" ||
+		result.VNIC.Address != "10.66.0.1" ||
+		result.VNIC.PrefixLength != 24 ||
+		result.VNIC.MTU != 1420 {
+		t.Fatalf("virtual adapter descriptor = %#v", result.VNIC)
+	}
+	if result.VNIC.CreatedAt == "" {
+		t.Fatal("created_at must be reported after a successful create")
+	}
+	if len(controller.activateConfigs) != 1 {
+		t.Fatalf("activate calls = %d, want 1", len(controller.activateConfigs))
+	}
+	if controller.activateConfigs[0].InterfaceName != "HypoMux-VNIC" {
+		t.Fatalf("activation config = %#v", controller.activateConfigs[0])
+	}
+
+	// The Core-issued executable is forced even when the desktop asserts another
+	// path; the virtual adapter keeper runs the same pinned binary as the TUN.
+	if controller.activateConfigs[0].Executable != testTunExecutable {
+		t.Fatalf("executable = %q, want %q", controller.activateConfigs[0].Executable, testTunExecutable)
+	}
+
+	repeat, _ := engineServer.handle(
+		context.Background(),
+		vnicCreateRequest("vnic-create-again", testVNICCreateParams),
+	)
+	if repeat.Error != nil {
+		t.Fatalf("repeated vnic.create failed: %#v", repeat.Error)
+	}
+	if len(controller.activateConfigs) != 1 {
+		t.Fatalf("activate calls = %d, want 1 for an identical repeat", len(controller.activateConfigs))
+	}
+	if controller.stopCalls != 0 {
+		t.Fatalf("stop calls = %d, want 0 for an identical repeat", controller.stopCalls)
+	}
+}
+
+func TestServerReplacesVirtualAdapterWhenParametersChange(t *testing.T) {
+	engineServer, controller := newVNICLifecycleServer(t)
+	if response, _ := engineServer.handle(
+		context.Background(),
+		vnicCreateRequest("vnic-create", testVNICCreateParams),
+	); response.Error != nil {
+		t.Fatalf("vnic.create failed: %#v", response.Error)
+	}
+	changed := strings.Replace(testVNICCreateParams, "10.66.0.1", "10.77.0.1", 1)
+	response, _ := engineServer.handle(
+		context.Background(),
+		vnicCreateRequest("vnic-create-replace", changed),
+	)
+	if response.Error != nil {
+		t.Fatalf("replacement vnic.create failed: %#v", response.Error)
+	}
+	result := response.Result.(api.VNICCreateResult)
+	if result.VNIC.Address != "10.77.0.1" {
+		t.Fatalf("address = %q, want the replacement address", result.VNIC.Address)
+	}
+	if controller.stopCalls != 1 {
+		t.Fatalf("stop calls = %d, want 1 before the replacement activation", controller.stopCalls)
+	}
+	if len(controller.activateConfigs) != 2 {
+		t.Fatalf("activate calls = %d, want 2", len(controller.activateConfigs))
+	}
+}
+
+func TestServerRejectsInvalidVirtualAdapterParameters(t *testing.T) {
+	engineServer, controller := newVNICLifecycleServer(t)
+	cases := map[string]string{
+		"missing name":      `{"executable":"C:\\HypoMux\\bin\\sing-box.exe","config_path":"C:\\v.json","startup_timeout_ms":2000,"interface_name":"","address":"10.66.0.1","prefix_length":24,"mtu":1420}`,
+		"missing address":   `{"executable":"C:\\HypoMux\\bin\\sing-box.exe","config_path":"C:\\v.json","startup_timeout_ms":2000,"interface_name":"HypoMux-VNIC","address":"","prefix_length":24,"mtu":1420}`,
+		"ipv6 address":      `{"executable":"C:\\HypoMux\\bin\\sing-box.exe","config_path":"C:\\v.json","startup_timeout_ms":2000,"interface_name":"HypoMux-VNIC","address":"fd00::1","prefix_length":24,"mtu":1420}`,
+		"bad prefix":        `{"executable":"C:\\HypoMux\\bin\\sing-box.exe","config_path":"C:\\v.json","startup_timeout_ms":2000,"interface_name":"HypoMux-VNIC","address":"10.66.0.1","prefix_length":33,"mtu":1420}`,
+		"bad mtu":           `{"executable":"C:\\HypoMux\\bin\\sing-box.exe","config_path":"C:\\v.json","startup_timeout_ms":2000,"interface_name":"HypoMux-VNIC","address":"10.66.0.1","prefix_length":24,"mtu":100}`,
+		"non object params": `12345`,
+	}
+	for name, params := range cases {
+		t.Run(name, func(t *testing.T) {
+			response, _ := engineServer.handle(
+				context.Background(),
+				vnicCreateRequest("vnic-invalid", params),
+			)
+			if response.Error == nil || response.Error.Code != "invalid_params" {
+				t.Fatalf("error = %#v, want invalid_params", response.Error)
+			}
+		})
+	}
+	if len(controller.activateConfigs) != 0 {
+		t.Fatalf("activate calls = %d, want 0 for rejected requests", len(controller.activateConfigs))
+	}
+}
+
+func TestServerRequiresElevationForVirtualAdapterLifecycle(t *testing.T) {
+	engineServer, _ := newVNICLifecycleServer(t)
+	engineServer.identity = platform.Identity{Elevated: false}
+	response, _ := engineServer.handle(
+		context.Background(),
+		vnicCreateRequest("vnic-create", testVNICCreateParams),
+	)
+	if response.Error == nil || response.Error.Code != "elevation_required" {
+		t.Fatalf("vnic.create error = %#v, want elevation_required", response.Error)
+	}
+	removeResponse, _ := engineServer.handle(
+		context.Background(),
+		[]byte(`{"protocol":1,"id":"vnic-remove","method":"vnic.remove"}`),
+	)
+	if removeResponse.Error != nil {
+		t.Fatalf("vnic.remove must stay idempotent without elevation: %#v", removeResponse.Error)
+	}
+}
+
+func TestServerReportsVirtualAdapterStatusAndRemoval(t *testing.T) {
+	engineServer, controller := newVNICLifecycleServer(t)
+	absent, _ := engineServer.handle(
+		context.Background(),
+		[]byte(`{"protocol":1,"id":"vnic-status","method":"vnic.status"}`),
+	)
+	if absent.Error != nil {
+		t.Fatalf("vnic.status failed: %#v", absent.Error)
+	}
+	if status := absent.Result.(api.VNICStatus); status.State != vnic.StateAbsent {
+		t.Fatalf("state = %q, want %q", status.State, vnic.StateAbsent)
+	}
+
+	if response, _ := engineServer.handle(
+		context.Background(),
+		vnicCreateRequest("vnic-create", testVNICCreateParams),
+	); response.Error != nil {
+		t.Fatalf("vnic.create failed: %#v", response.Error)
+	}
+	present, _ := engineServer.handle(
+		context.Background(),
+		[]byte(`{"protocol":1,"id":"vnic-status","method":"vnic.status"}`),
+	)
+	if status := present.Result.(api.VNICStatus); status.State != vnic.StatePresent {
+		t.Fatalf("state = %q, want %q", status.State, vnic.StatePresent)
+	}
+
+	removed, _ := engineServer.handle(
+		context.Background(),
+		[]byte(`{"protocol":1,"id":"vnic-remove","method":"vnic.remove"}`),
+	)
+	if removed.Error != nil {
+		t.Fatalf("vnic.remove failed: %#v", removed.Error)
+	}
+	if status := removed.Result.(api.VNICStatus); status.State != vnic.StateAbsent {
+		t.Fatalf("state = %q, want %q after remove", status.State, vnic.StateAbsent)
+	}
+	if controller.stopCalls != 1 {
+		t.Fatalf("stop calls = %d, want 1", controller.stopCalls)
+	}
+
+	// A second remove is a no-op that still reports absent.
+	again, _ := engineServer.handle(
+		context.Background(),
+		[]byte(`{"protocol":1,"id":"vnic-remove-again","method":"vnic.remove"}`),
+	)
+	if again.Error != nil {
+		t.Fatalf("repeated vnic.remove failed: %#v", again.Error)
+	}
+	if status := again.Result.(api.VNICStatus); status.State != vnic.StateAbsent {
+		t.Fatalf("state = %q, want %q after repeated remove", status.State, vnic.StateAbsent)
+	}
+	if controller.stopCalls != 1 {
+		t.Fatalf("stop calls = %d, want 1 after repeated remove", controller.stopCalls)
+	}
+}
+
+func TestServerReportsVirtualAdapterStartFailure(t *testing.T) {
+	engineServer, controller := newVNICLifecycleServer(t)
+	controller.activateErr = errors.New("wintun: adapter creation failed")
+	response, _ := engineServer.handle(
+		context.Background(),
+		vnicCreateRequest("vnic-create", testVNICCreateParams),
+	)
+	if response.Error == nil || response.Error.Code != "tun_failed" {
+		t.Fatalf("error = %#v, want tun_failed", response.Error)
+	}
+	if controller.stopCalls != 1 {
+		t.Fatalf("stop calls = %d, want 1 to roll back the failed activation", controller.stopCalls)
+	}
+}
+
+func TestServerRetriesVirtualAdapterAfterStaleWintunFailure(t *testing.T) {
+	engineServer, controller := newVNICLifecycleServer(t)
+	controller.activateErrs = []error{
+		errors.New("cannot create a file when that file already exists"),
+		nil,
+	}
+	response, _ := engineServer.handle(
+		context.Background(),
+		vnicCreateRequest("vnic-create", testVNICCreateParams),
+	)
+	if response.Error != nil {
+		t.Fatalf("vnic.create failed: %#v", response.Error)
+	}
+	if len(controller.activateConfigs) != 2 {
+		t.Fatalf("activate calls = %d, want 2 after the stale adapter retry", len(controller.activateConfigs))
+	}
+	if result := response.Result.(api.VNICCreateResult); result.VNIC.State != vnic.StatePresent {
+		t.Fatalf("state = %q, want %q", result.VNIC.State, vnic.StatePresent)
+	}
+}
+
+func TestStaleVirtualAdapterClassificationExcludesMainTunAdapter(t *testing.T) {
+	if isStaleVNICAdapterError(nil) {
+		t.Fatal("nil must not be classified as a stale virtual adapter")
+	}
+	if !isStaleVNICAdapterError(errors.New("cannot create a file when that file already exists")) {
+		t.Fatal("the generic Wintun collision must be classified as a stale virtual adapter")
+	}
+	if !isStaleVNICAdapterError(errors.New("create adapter failed: open existing adapter: element not found")) {
+		t.Fatal("the stale Wintun adapter failure must be classified as a virtual adapter collision")
+	}
+	if isStaleVNICAdapterError(errors.New("stale HypoMux-Tun device still exists: SWD\\WINTUN\\123")) {
+		t.Fatal("the main TUN adapter message must not be claimed by the virtual adapter path")
+	}
+	if isStaleVNICAdapterError(errors.New("connection refused")) {
+		t.Fatal("unrelated failures must not be classified as stale")
+	}
+}
+
+func TestHostExitStopsVirtualAdapterKeeper(t *testing.T) {
+	engineServer, controller := newVNICLifecycleServer(t)
+	if response, _ := engineServer.handle(
+		context.Background(),
+		vnicCreateRequest("vnic-create", testVNICCreateParams),
+	); response.Error != nil {
+		t.Fatalf("vnic.create failed: %#v", response.Error)
+	}
+	if controller.Status().State != tun.StateRunning {
+		t.Fatalf("keeper status = %#v", controller.Status())
+	}
+
+	engineServer.stopProxyForHostExit()
+
+	if controller.stopCalls != 1 {
+		t.Fatalf("stop calls = %d, want the keeper stopped on host exit", controller.stopCalls)
+	}
+	if state := controller.Status().State; state != tun.StateStopped {
+		t.Fatalf("keeper state = %q, want %q after host exit", state, tun.StateStopped)
+	}
+	status := engineServer.vnic.Status()
+	if status.State != vnic.StateAbsent {
+		t.Fatalf("adapter state = %q, want %q after host exit", status.State, vnic.StateAbsent)
+	}
 }

@@ -2,7 +2,7 @@
 
 package tun
 
-func tunPlatformReady(expectedAddress string) bool {
-	_, ready := tunInterfaceWithExpectedAddress(expectedAddress)
+func tunPlatformReady(interfaceName string, expectedAddress string) bool {
+	_, ready := tunInterfaceWithExpectedAddress(interfaceName, expectedAddress)
 	return ready
 }

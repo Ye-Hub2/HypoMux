@@ -96,7 +96,7 @@ func TestSupervisorPreservesBundledFakeIPAcrossImmediateAndCachedRestarts(t *tes
 		}
 		return exec.CommandContext(ctx, exe, args...)
 	}
-	supervisor.startupReady = func(string) bool { _, err := lookup("ready"); return err == nil }
+	supervisor.startupReady = func(string, string) bool { _, err := lookup("ready"); return err == nil }
 	supervisor.readyStableFor = defaultReadyStableFor
 	c := testConfig(t)
 	c.Executable = executable

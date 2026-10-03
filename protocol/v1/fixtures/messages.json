@@ -47,6 +47,9 @@
           "tun.activate",
           "tun.status",
           "tun.deactivate",
+          "vnic.create",
+          "vnic.status",
+          "vnic.remove",
           "dns.resolve",
           "dns.status",
           "health.check",
@@ -396,6 +399,99 @@
         "tun": {
           "state": "stopped"
         }
+      }
+    }
+  },
+  {
+    "name": "vnic_create_request",
+    "kind": "request",
+    "method": "vnic.create",
+    "message": {
+      "protocol": 1,
+      "id": "fixture-vnic-create",
+      "method": "vnic.create",
+      "params": {
+        "executable": "C:\\Program Files\\HypoMux\\bin\\sing-box.exe",
+        "config_path": "C:\\Users\\Example\\.hypomux\\vnic-config.json",
+        "config_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "startup_timeout_ms": 20000,
+        "interface_name": "HypoMux-VNIC",
+        "address": "10.66.0.1",
+        "prefix_length": 24,
+        "mtu": 1420
+      }
+    }
+  },
+  {
+    "name": "vnic_create_response",
+    "kind": "response",
+    "method": "vnic.create",
+    "message": {
+      "protocol": 1,
+      "id": "fixture-vnic-create",
+      "result": {
+        "accepted": true,
+        "vnic": {
+          "state": "present",
+          "interface_name": "HypoMux-VNIC",
+          "address": "10.66.0.1",
+          "prefix_length": 24,
+          "mtu": 1420,
+          "created_at": "2026-07-30T02:12:05Z"
+        }
+      }
+    }
+  },
+  {
+    "name": "vnic_status_request",
+    "kind": "request",
+    "method": "vnic.status",
+    "message": {
+      "protocol": 1,
+      "id": "fixture-vnic-status",
+      "method": "vnic.status"
+    }
+  },
+  {
+    "name": "vnic_status_response",
+    "kind": "response",
+    "method": "vnic.status",
+    "message": {
+      "protocol": 1,
+      "id": "fixture-vnic-status",
+      "result": {
+        "state": "present",
+        "interface_name": "HypoMux-VNIC",
+        "address": "10.66.0.1",
+        "prefix_length": 24,
+        "mtu": 1420,
+        "created_at": "2026-07-30T02:12:05Z"
+      }
+    }
+  },
+  {
+    "name": "vnic_remove_request",
+    "kind": "request",
+    "method": "vnic.remove",
+    "message": {
+      "protocol": 1,
+      "id": "fixture-vnic-remove",
+      "method": "vnic.remove"
+    }
+  },
+  {
+    "name": "vnic_remove_response",
+    "kind": "response",
+    "method": "vnic.remove",
+    "message": {
+      "protocol": 1,
+      "id": "fixture-vnic-remove",
+      "result": {
+        "state": "absent",
+        "interface_name": "HypoMux-VNIC",
+        "address": "10.66.0.1",
+        "prefix_length": 24,
+        "mtu": 1420
       }
     }
   },

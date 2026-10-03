@@ -211,6 +211,8 @@ func decodeRequestParams(t *testing.T, request protocol.Request) {
 		target = &EngineTelemetryParams{}
 	case MethodTunActivate:
 		target = &TunActivateParams{}
+	case MethodVNICCreate:
+		target = &VNICCreateParams{}
 	case MethodDNSResolve:
 		target = &DNSResolveParams{}
 	case MethodMTUSet:
@@ -224,6 +226,8 @@ func decodeRequestParams(t *testing.T, request protocol.Request) {
 		MethodEngineStop,
 		MethodTunStatus,
 		MethodTunDeactivate,
+		MethodVNICStatus,
+		MethodVNICRemove,
 		MethodDNSStatus,
 		MethodHealthCheck,
 		MethodHotspotInspect,
@@ -262,6 +266,10 @@ func decodeResult(t *testing.T, method string, payload json.RawMessage) {
 		target = &TunLifecycleResult{}
 	case MethodTunStatus:
 		target = &tun.Status{}
+	case MethodVNICCreate:
+		target = &VNICCreateResult{}
+	case MethodVNICStatus, MethodVNICRemove:
+		target = &VNICStatus{}
 	case MethodDNSResolve:
 		target = &dns.Result{}
 	case MethodDNSStatus:

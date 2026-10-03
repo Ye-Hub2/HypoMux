@@ -111,10 +111,7 @@ input {
 
 input,
 textarea,
-[contenteditable="true"],
-.ai-message,
-.ai-entry pre,
-.ai-markdown {
+[contenteditable="true"] {
   user-select: text;
   -webkit-user-select: text;
 }

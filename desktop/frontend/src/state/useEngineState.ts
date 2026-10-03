@@ -350,14 +350,6 @@ export function useEngineState(
   }, []);
 
   useEffect(() => {
-    const changed = () => {
-      if (!operationActive.current && !adapterSaveQueue.isPending()) void load();
-    };
-    window.addEventListener("hypomux:ai-changed", changed);
-    return () => window.removeEventListener("hypomux:ai-changed", changed);
-  }, [load]);
-
-  useEffect(() => {
     const onVisibilityChange = (event: Event) => {
       const enabled = (event as CustomEvent<boolean>).detail;
       if (typeof enabled === "boolean") setHideVirtualAdapters(enabled);

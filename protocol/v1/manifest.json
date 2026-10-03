@@ -73,6 +73,24 @@
       "cancellation": "caller_deadline_and_host_context"
     },
     {
+      "name": "vnic.create",
+      "idempotency": "state_guarded",
+      "privilege": "administrator",
+      "cancellation": "caller_deadline_and_host_context"
+    },
+    {
+      "name": "vnic.status",
+      "idempotency": "read_only",
+      "privilege": "none",
+      "cancellation": "not_applicable"
+    },
+    {
+      "name": "vnic.remove",
+      "idempotency": "safe_retry",
+      "privilege": "administrator",
+      "cancellation": "caller_deadline_and_host_context"
+    },
+    {
       "name": "dns.resolve",
       "idempotency": "read_only_probe",
       "privilege": "none",

@@ -26,8 +26,19 @@ const (
 	cleanupTimeout        = 15 * time.Second
 	gracefulStopTimeout   = 5 * time.Second
 	maxLogLineBytes       = 64 * 1024
-	tunInterfaceName      = "HypoMux-Tun"
 )
+
+// Adapter names the Core owns. ManagedInterfaceName is the main TUN adapter
+// used by the proxy data path; VNICInterfaceName is the default name of the
+// auxiliary virtual adapter. Both Wintun adapters are created by a sing-box
+// sidecar, so both are bound to their keeper process lifetime.
+const (
+	ManagedInterfaceName = "HypoMux-Tun"
+	VNICInterfaceName    = "HypoMux-VNIC"
+)
+
+// tunInterfaceName is the historical name of the main TUN adapter.
+const tunInterfaceName = ManagedInterfaceName
 
 type State string
 
@@ -45,7 +56,11 @@ type Config struct {
 	ConfigPath             string
 	ConfigSHA256           string
 	RequireProtectedConfig bool
-	StartupTimeout         time.Duration
+	// InterfaceName names the adapter the staged configuration must bring up.
+	// An empty value falls back to the tun inbound declared by the staged
+	// configuration, and then to the managed HypoMux-Tun adapter.
+	InterfaceName  string
+	StartupTimeout time.Duration
 }
 
 type Status struct {
@@ -102,7 +117,7 @@ type Supervisor struct {
 	stageConfig    func(Config) (string, func(), error)
 	onLog          func(string)
 	onUnexpected   func(Status)
-	startupReady   func(string) bool
+	startupReady   func(string, string) bool
 	readyStableFor time.Duration
 	nextGeneration uint64
 }
@@ -180,12 +195,20 @@ func (s *Supervisor) Activate(ctx context.Context, config Config) (Status, error
 		return s.Status(), err
 	}
 	s.emitLog("[TUN] sing-box configuration check passed")
-	expectedAddress, err := configuredTunIPv4Address(normalized.ConfigPath)
+	expectedInterface, err := expectedTunInterfaceName(normalized)
 	if err != nil {
 		s.failStart(err)
 		return s.Status(), err
 	}
-	s.emitLog("[TUN] expected IPv4 address: " + expectedAddress)
+	expectedAddress, err := configuredTunIPv4Address(normalized.ConfigPath, expectedInterface)
+	if err != nil {
+		s.failStart(err)
+		return s.Status(), err
+	}
+	s.emitLog(fmt.Sprintf(
+		"[TUN] expecting adapter %s with IPv4 address %s",
+		expectedInterface, expectedAddress,
+	))
 	if err := s.cleanupWithTimeout(ctx); err != nil {
 		err = fmt.Errorf("clean stale HypoMux TUN state: %w", err)
 		s.failStart(err)
@@ -260,11 +283,11 @@ func (s *Supervisor) Activate(ctx context.Context, config Config) (Status, error
 		case <-timer.C:
 			err := fmt.Errorf(
 				"TUN interface %s did not become ready within %s",
-				tunInterfaceName, normalized.StartupTimeout,
+				expectedInterface, normalized.StartupTimeout,
 			)
 			return s.failStartedRun(run, err)
 		case <-readyTicker.C:
-			if s.startupReady != nil && s.startupReady(expectedAddress) {
+			if s.startupReady != nil && s.startupReady(expectedInterface, expectedAddress) {
 				if readySince.IsZero() {
 					readySince = time.Now()
 				}
@@ -331,7 +354,8 @@ func (s *Supervisor) markRunning(run *sidecarRun) (Status, error) {
 	return status, nil
 }
 
-func configuredTunIPv4Address(path string) (string, error) {
+func configuredTunIPv4Address(path string, expectedName string) (string, error) {
+	name := strings.TrimSpace(expectedName)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("read staged TUN address: %w", err)
@@ -347,7 +371,12 @@ func configuredTunIPv4Address(path string) (string, error) {
 		return "", fmt.Errorf("parse staged TUN address: %w", err)
 	}
 	for _, inbound := range config.Inbounds {
-		if inbound.Type != "tun" || inbound.Name != tunInterfaceName {
+		if inbound.Type != "tun" {
+			continue
+		}
+		// A named expectation keeps the original guarantee: the staged
+		// configuration must declare the adapter the caller is bringing up.
+		if name != "" && inbound.Name != name {
 			continue
 		}
 		for _, value := range inbound.Address {
@@ -357,11 +386,18 @@ func configuredTunIPv4Address(path string) (string, error) {
 			}
 		}
 	}
-	return "", errors.New("staged configuration has no IPv4 address for HypoMux-Tun")
+	if name == "" {
+		name = tunInterfaceName
+	}
+	return "", fmt.Errorf("staged configuration has no IPv4 address for %s", name)
 }
 
-func tunInterfaceWithExpectedAddress(expectedAddress string) (*net.Interface, bool) {
-	device, err := net.InterfaceByName(tunInterfaceName)
+func tunInterfaceWithExpectedAddress(interfaceName string, expectedAddress string) (*net.Interface, bool) {
+	name := strings.TrimSpace(interfaceName)
+	if name == "" {
+		name = tunInterfaceName
+	}
+	device, err := net.InterfaceByName(name)
 	if err != nil || device.Flags&net.FlagUp == 0 {
 		return nil, false
 	}
@@ -665,6 +701,7 @@ func normalizeConfig(config Config) (Config, error) {
 		ConfigPath:             filepath.Clean(configPath),
 		ConfigSHA256:           configDigest,
 		RequireProtectedConfig: config.RequireProtectedConfig,
+		InterfaceName:          strings.TrimSpace(config.InterfaceName),
 		StartupTimeout:         timeout,
 	}, nil
 }

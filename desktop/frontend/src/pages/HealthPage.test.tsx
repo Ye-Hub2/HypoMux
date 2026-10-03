@@ -26,7 +26,7 @@ it("submits only selected IDs after returning to a preserved diagnostics page", 
   const view = render(show(true));
   await waitFor(() => expect(screen.getAllByRole("button", { name: "Start diagnostics" })[0].hasAttribute("disabled")).toBe(false));
   view.rerender(show(false));
-  // Home or AI can change mode/strategy while this component stays mounted.
+  // Home can change mode/strategy while this component stays mounted.
   view.rerender(show(true));
   fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
   await waitFor(() => expect(mock.saveSelected).toHaveBeenCalledWith([]));

@@ -147,15 +147,13 @@ func main() {
 		},
 		supportLogs,
 	)
+	virtualAdapterService := services.NewVirtualAdapterService(engineService)
 	var diagnosticsService *services.DiagnosticsService
-	var aiService *services.AIService
 	desktop := wails.NewDesktopHost(app, mainWindow, startSilent, func() {
-		if aiService != nil {
-			aiService.Shutdown()
-		}
 		if diagnosticsService != nil {
 			diagnosticsService.Shutdown()
 		}
+		virtualAdapterService.Shutdown()
 		engineService.Shutdown()
 	}, func() bool {
 		return settingsService.Get().CloseToTray
@@ -178,8 +176,6 @@ func main() {
 	)
 	routingService := services.NewRoutingRuleService(settingsService, adapterService, desktop)
 	ruleSetService := services.NewRuleSetService(settingsService, adapterService)
-	aiService = services.NewAIService(settingsService, adapterService, engineService, routingService, diagnosticsService, tunService, supportLogs)
-	app.RegisterService(application.NewService(aiService))
 	app.RegisterService(application.NewService(desktop))
 	app.RegisterService(application.NewService(settingsService))
 	app.RegisterService(application.NewService(adapterService))
@@ -189,6 +185,7 @@ func main() {
 	app.RegisterService(application.NewService(diagnosticsService))
 	app.RegisterService(application.NewService(services.NewMTUService(engineService, settingsService)))
 	app.RegisterService(application.NewService(tunService))
+	app.RegisterService(application.NewService(virtualAdapterService))
 	app.RegisterService(application.NewService(blockedDomainService))
 	app.RegisterService(application.NewService(updaterService))
 	app.RegisterService(application.NewService(appearanceService))

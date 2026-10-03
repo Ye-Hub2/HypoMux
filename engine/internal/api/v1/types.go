@@ -28,6 +28,9 @@ const (
 	MethodTunActivate       = "tun.activate"
 	MethodTunStatus         = "tun.status"
 	MethodTunDeactivate     = "tun.deactivate"
+	MethodVNICCreate        = "vnic.create"
+	MethodVNICStatus        = "vnic.status"
+	MethodVNICRemove        = "vnic.remove"
 	MethodDNSResolve        = "dns.resolve"
 	MethodDNSStatus         = "dns.status"
 	MethodHealthCheck       = "health.check"
@@ -55,6 +58,9 @@ var capabilities = []string{
 	MethodTunActivate,
 	MethodTunStatus,
 	MethodTunDeactivate,
+	MethodVNICCreate,
+	MethodVNICStatus,
+	MethodVNICRemove,
 	MethodDNSResolve,
 	MethodDNSStatus,
 	MethodHealthCheck,
@@ -275,6 +281,48 @@ type TunLifecycleResult struct {
 	RecoveredStaleAdapter bool       `json:"recovered_stale_adapter,omitempty"`
 	IPv4OnlyFallback      bool       `json:"ipv4_only_fallback,omitempty"`
 	Tun                   tun.Status `json:"tun"`
+}
+
+// VNICCreateParams describes the virtual adapter the Core must keep alive
+// through a managed Wintun sidecar. The adapter name and address are owned by
+// the caller; they are never inferred by the engine.
+type VNICCreateParams struct {
+	Executable       string `json:"executable"`
+	ConfigPath       string `json:"config_path"`
+	ConfigSHA256     string `json:"config_sha256,omitempty"`
+	StartupTimeoutMS int    `json:"startup_timeout_ms"`
+	InterfaceName    string `json:"interface_name"`
+	Address          string `json:"address"`
+	PrefixLength     int    `json:"prefix_length"`
+	MTU              int    `json:"mtu"`
+}
+
+func (p VNICCreateParams) Config() tun.Config {
+	return tun.Config{
+		Executable:     p.Executable,
+		ConfigPath:     p.ConfigPath,
+		ConfigSHA256:   p.ConfigSHA256,
+		InterfaceName:  p.InterfaceName,
+		StartupTimeout: time.Duration(p.StartupTimeoutMS) * time.Millisecond,
+	}
+}
+
+// VNICStatus reports the virtual adapter lifecycle. Absence of a keeper
+// process is reported as the absent state rather than an error.
+type VNICStatus struct {
+	State         string `json:"state"`
+	InterfaceName string `json:"interface_name"`
+	Address       string `json:"address"`
+	PrefixLength  int    `json:"prefix_length"`
+	MTU           int    `json:"mtu"`
+	AdapterGUID   string `json:"adapter_guid,omitempty"`
+	CreatedAt     string `json:"created_at,omitempty"`
+	LastError     string `json:"last_error,omitempty"`
+}
+
+type VNICCreateResult struct {
+	Accepted bool       `json:"accepted"`
+	VNIC     VNICStatus `json:"vnic"`
 }
 
 type LogRecordData struct {

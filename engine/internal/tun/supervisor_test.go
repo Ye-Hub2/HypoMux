@@ -67,8 +67,10 @@ func TestSupervisorActivatesStopsAndCleansExactRun(t *testing.T) {
 
 func TestSupervisorReturnsWhenTunInterfaceIsReady(t *testing.T) {
 	supervisor, _, _ := testSupervisor(t, "stable")
+	var observedInterface string
 	var observedAddress string
-	supervisor.startupReady = func(address string) bool {
+	supervisor.startupReady = func(interfaceName string, address string) bool {
+		observedInterface = interfaceName
 		observedAddress = address
 		return address == "10.255.255.1"
 	}
@@ -81,6 +83,9 @@ func TestSupervisorReturnsWhenTunInterfaceIsReady(t *testing.T) {
 	started := time.Now()
 	if _, err := supervisor.Activate(context.Background(), config); err != nil {
 		t.Fatalf("Activate() failed: %v", err)
+	}
+	if observedInterface != "HypoMux-Tun" {
+		t.Fatalf("readiness interface = %q", observedInterface)
 	}
 	if observedAddress != "10.255.255.1" {
 		t.Fatalf("readiness address = %q", observedAddress)
@@ -95,7 +100,7 @@ func TestSupervisorReturnsWhenTunInterfaceIsReady(t *testing.T) {
 
 func TestSupervisorTreatsStartupTimeoutAsFailure(t *testing.T) {
 	supervisor, cleanupCalls, _ := testSupervisor(t, "stable")
-	supervisor.startupReady = func(string) bool { return false }
+	supervisor.startupReady = func(string, string) bool { return false }
 	config := testConfig(t)
 	config.StartupTimeout = 140 * time.Millisecond
 	status, err := supervisor.Activate(context.Background(), config)
@@ -113,12 +118,41 @@ func TestSupervisorTreatsStartupTimeoutAsFailure(t *testing.T) {
 func TestSupervisorRejectsMissingOwnedAddressBeforeCleanup(t *testing.T) {
 	supervisor, cleanupCalls, _ := testSupervisor(t, "stable")
 	config := testConfig(t)
+	// The caller asks for the managed adapter while the staged configuration
+	// declares a different one, so there is no owned IPv4 address to wait for and
+	// the supervisor must reject the run before touching the network.
+	config.InterfaceName = ManagedInterfaceName
 	if err := os.WriteFile(config.ConfigPath, []byte(`{"inbounds":[{"type":"tun","interface_name":"other-tun","address":["10.255.255.1/30"]}]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	status, err := supervisor.Activate(context.Background(), config)
 	if err == nil || status.State != StateFailed || cleanupCalls.Load() != 0 {
 		t.Fatalf("status=%#v err=%v cleanup=%d", status, err, cleanupCalls.Load())
+	}
+}
+
+func TestSupervisorAcceptsConfiguredInterfaceNameOverride(t *testing.T) {
+	supervisor, _, _ := testSupervisor(t, "stable")
+	var observedInterface string
+	supervisor.startupReady = func(interfaceName string, _ string) bool {
+		observedInterface = interfaceName
+		return true
+	}
+	supervisor.readyStableFor = 10 * time.Millisecond
+	config := testConfig(t)
+	config.InterfaceName = "HypoMux-VNIC"
+	config.StartupTimeout = 900 * time.Millisecond
+	if err := os.WriteFile(config.ConfigPath, []byte(`{"inbounds":[{"type":"tun","interface_name":"HypoMux-VNIC","address":["10.66.0.1/24"]}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := supervisor.Activate(context.Background(), config); err != nil {
+		t.Fatalf("Activate() failed: %v", err)
+	}
+	if observedInterface != "HypoMux-VNIC" {
+		t.Fatalf("readiness interface = %q", observedInterface)
+	}
+	if _, err := supervisor.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() failed: %v", err)
 	}
 }
 
@@ -272,10 +306,10 @@ func testSupervisor(
 		return config.ConfigPath, func() {}, nil
 	}
 	if mode == "stable" {
-		supervisor.startupReady = func(string) bool { return true }
+		supervisor.startupReady = func(string, string) bool { return true }
 		supervisor.readyStableFor = 10 * time.Millisecond
 	} else {
-		supervisor.startupReady = func(string) bool { return false }
+		supervisor.startupReady = func(string, string) bool { return false }
 	}
 	supervisor.command = func(
 		ctx context.Context,

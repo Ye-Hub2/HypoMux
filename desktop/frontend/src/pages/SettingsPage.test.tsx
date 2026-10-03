@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultAppearance } from "../theme/appearance.presets";
 import { ToolsPage } from "./ToolsPage";
 import { SettingsPage } from "./SettingsPage";
 import { PageActivity } from "../components/shell/PageActivity";
-import { AI_AVAILABILITY_EVENT } from "../state/aiAvailability";
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -76,55 +75,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("persists the global AI switch and removes AI settings and companion controls", async () => {
-  const changed = vi.fn();
-  window.addEventListener(AI_AVAILABILITY_EVENT, changed);
-  try {
-    render(<SettingsPage adapterRuntime={[]} onOpenBlockedDomains={() => {}} />);
-    await screen.findByText("Settings synced");
-    expect(screen.getByRole("button", { name: "AI assistant settings" })).toBeTruthy();
-    const toggle = screen.getByRole("switch", { name: "Enable AI features" }) as HTMLInputElement;
-    expect(toggle.checked).toBe(true);
-    fireEvent.click(toggle);
-    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ ai_enabled: false }), ["ai_enabled"]));
-    await waitFor(() => expect(changed.mock.calls.some(([event]) => event.detail === false)).toBe(true));
-    expect(toggle.checked).toBe(false);
-    expect(screen.queryByRole("button", { name: "AI assistant settings" })).toBeNull();
-    expect(screen.queryByRole("switch", { name: "Show AI companion" })).toBeNull();
-    fireEvent.click(toggle);
-    await waitFor(() => expect(mocks.update).toHaveBeenLastCalledWith(expect.objectContaining({ ai_enabled: true }), ["ai_enabled"]));
-    expect(await screen.findByRole("button", { name: "AI assistant settings" })).toBeTruthy();
-  } finally { window.removeEventListener(AI_AVAILABILITY_EVENT, changed); }
+it("no longer exposes any AI settings or companion control", async () => {
+  render(<SettingsPage adapterRuntime={[]} onOpenBlockedDomains={() => {}} />);
+  await screen.findByText("Settings synced");
+  expect(screen.queryByRole("button", { name: "AI assistant settings" })).toBeNull();
+  expect(screen.queryByRole("switch", { name: "Enable AI features" })).toBeNull();
+  expect(screen.queryByRole("switch", { name: "Show AI companion" })).toBeNull();
+  expect(screen.queryByText("Enable AI features")).toBeNull();
 });
 
-it("publishes AI changes only after save succeeds and restores failed saves", async () => {
-  let reject!: (error: Error) => void;
-  mocks.update.mockReturnValue(new Promise((_, fail) => { reject = fail; }));
-  const changed = vi.fn();
-  window.addEventListener(AI_AVAILABILITY_EVENT, changed);
-  try {
-    render(<SettingsPage adapterRuntime={[]} onOpenBlockedDomains={() => {}} />);
-    await screen.findByText("Settings synced");
-    changed.mockClear();
-    const toggle = screen.getByRole("switch", { name: "Enable AI features" }) as HTMLInputElement;
-    fireEvent.click(toggle);
-    await waitFor(() => expect(mocks.update).toHaveBeenCalled());
-    expect(toggle.disabled).toBe(true);
-    expect(changed).not.toHaveBeenCalled();
-    await act(async () => reject(new Error("disk full")));
-    await waitFor(() => expect(toggle.checked).toBe(true));
-    expect(changed.mock.calls.every(([event]) => event.detail === true)).toBe(true);
-    expect(screen.getByRole("button", { name: "AI assistant settings" })).toBeTruthy();
-  } finally { window.removeEventListener(AI_AVAILABILITY_EVENT, changed); }
-});
-
-it("loads persisted AI opt-out and exposes the switch in Chinese", async () => {
+it("no longer exposes any AI control in Chinese either", async () => {
   mocks.locale = "zh";
-  mocks.get.mockResolvedValue({ ...initial, ai_enabled: false });
   render(<SettingsPage adapterRuntime={[]} onOpenBlockedDomains={() => {}} />);
   await screen.findByText("配置已同步");
-  expect((screen.getByRole("switch", { name: "启用 AI 功能" }) as HTMLInputElement).checked).toBe(false);
   expect(screen.queryByRole("button", { name: "AI 助手设置" })).toBeNull();
+  expect(screen.queryByRole("switch", { name: "启用 AI 功能" })).toBeNull();
   expect(screen.queryByRole("switch", { name: "显示 AI 小精灵" })).toBeNull();
 });
 
@@ -310,7 +275,7 @@ describe("manual network drafts", () => {
   });
 });
 
-it("preserves an AI rule saved after loading the settings page", async () => {
+it("preserves a routing rule written elsewhere after loading the settings page", async () => {
   let persisted: any = { ...initial, routing_rules: [] };
   mocks.get.mockImplementation(async () => persisted);
   mocks.update.mockImplementation(async (next, fields: string[]) => {
@@ -321,25 +286,14 @@ it("preserves an AI rule saved after loading the settings page", async () => {
   await screen.findByText("Settings synced");
   const rule = { match_type: "process", value: "cs2.exe", outbound: "direct", priority: 1 };
   persisted = { ...persisted, routing_rules: [rule] };
-  // The save must be safe even before the next AI notification arrives.
+  // A field-scoped save must never replay a full payload over the store.
   fireEvent.click(screen.getByRole("switch", { name: "Hide virtual adapters on Home" }));
   await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce());
   expect(mocks.update.mock.calls[0][1]).toEqual(["hide_virtual_adapters"]);
   expect(persisted.routing_rules).toEqual([rule]);
 });
 
-it("refreshes AI changes without discarding the manual network draft", async () => {
-  render(<SettingsPage adapterRuntime={[]} onOpenBlockedDomains={() => {}} />);
-  await screen.findByText("Settings synced");
-  fireEvent.change(screen.getByRole("spinbutton", { name: "HTTP" }), { target: { value: "12345" } });
-  mocks.get.mockResolvedValue({ ...initial, hide_virtual_adapters: false });
-  act(() => { window.dispatchEvent(new CustomEvent("hypomux:ai-changed")); });
-  await waitFor(() => expect((screen.getByRole("switch", { name: "Hide virtual adapters on Home" }) as HTMLInputElement).checked).toBe(false));
-  expect((screen.getByRole("spinbutton", { name: "HTTP" }) as HTMLInputElement).value).toBe("12345");
-  expect(screen.getByText("Unsaved port and DNS changes")).toBeTruthy();
-});
-
-it("refreshes Steam preferences when returning from AI and while already visible", async () => {
+it("refreshes Steam preferences when the toolbox becomes active again", async () => {
   const show = (active: boolean) => <PageActivity.Provider value={active}><ToolsPage /></PageActivity.Provider>;
   const view = render(show(true));
   const toggle = await screen.findByRole("switch", { name: "Steam download optimization" });
@@ -348,22 +302,4 @@ it("refreshes Steam preferences when returning from AI and while already visible
   mocks.get.mockResolvedValue({ ...initial, steam_cdn_enabled: true });
   view.rerender(show(true));
   await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(true));
-  mocks.get.mockResolvedValue({ ...initial, steam_cdn_enabled: false });
-  act(() => { window.dispatchEvent(new CustomEvent("hypomux:ai-changed")); });
-  await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false));
-});
-
-it("ignores an old Steam preference response after a newer AI change", async () => {
-  render(<ToolsPage />);
-  const toggle = await screen.findByRole("switch", { name: "Steam download optimization" });
-  await waitFor(() => expect(toggle.hasAttribute("disabled")).toBe(false));
-  let finish!: (value: unknown) => void;
-  mocks.get.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-  act(() => { window.dispatchEvent(new CustomEvent("hypomux:ai-changed")); });
-  await waitFor(() => expect(finish).toBeTypeOf("function"));
-  mocks.get.mockResolvedValue({ ...initial, steam_cdn_enabled: true });
-  act(() => { window.dispatchEvent(new CustomEvent("hypomux:ai-changed")); });
-  await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(true));
-  await act(async () => { finish({ ...initial, steam_cdn_enabled: false }); });
-  expect((toggle as HTMLInputElement).checked).toBe(true);
 });

@@ -4,6 +4,7 @@ import * as EngineService from "../../bindings/github.com/Hypostasis-Cat/HypoMux
 import * as RoutingRuleService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/routingruleservice";
 import * as SettingsService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/settingsservice";
 import * as TunService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/tunservice";
+import * as VirtualAdapterService from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/virtualadapterservice";
 import { Call } from "@wailsio/runtime";
 import type {
   AppSettings,
@@ -20,6 +21,7 @@ import type {
   SupportLogSnapshot,
   TunPreflightIssue,
   TunPreflightSnapshot,
+  VirtualAdapterStatus as GeneratedVirtualAdapterStatus,
 } from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/services/models";
 
 export type {
@@ -65,8 +67,12 @@ export type RoutingSnapshot = Omit<GeneratedRoutingSnapshot, "match_order" | "re
 
 export type AdapterView = GeneratedAdapterView & { is_virtual?: boolean };
 
-export type CompleteAppSettings = Omit<AppSettings, "ai_enabled"> & {
-  ai_enabled?: boolean;
+// The generated model already carries the exact camelCase field names the virtual
+// adapter UI consumes (state/interfaceName/address/prefixLength/mtu/adapterGuid/
+// createdAt/lastError), so the alias only keeps pages off the generated path.
+export type VirtualAdapterStatus = GeneratedVirtualAdapterStatus;
+
+export type CompleteAppSettings = AppSettings & {
   update_channel?: "stable" | "preview";
   strategy?: string;
   steam_cdn_enabled?: boolean;
@@ -340,6 +346,11 @@ export const appServices = {
   tun: {
     latest: () => TunService.Latest(),
     preflight: (adapterIDs: string[]) => TunService.Preflight(adapterIDs),
+  },
+  virtualAdapter: {
+    create: (interfaceName: string, address: string) => VirtualAdapterService.Create(interfaceName, address),
+    status: () => VirtualAdapterService.Status(),
+    remove: () => VirtualAdapterService.Remove(),
   },
   settings: {
     get: async () => (await SettingsService.Get()) as CompleteAppSettings,

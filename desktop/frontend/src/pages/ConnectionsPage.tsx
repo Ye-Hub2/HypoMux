@@ -408,8 +408,8 @@ export function ConnectionsPage({
     setQuickRuleSaveError("");
     setQuickRuleSaving(true);
     try {
-      // Preserve the order and compare the revision at commit time: AI/MCP or
-      // another editor can still write while the preview is being calculated.
+      // Preserve the order and compare the revision at commit time: another
+      // editor can still write while the preview is being calculated.
       const latest = await appServices.routing.snapshot();
       const latestRules = latest.rules ?? [];
       const preview = await appServices.routing.previewBatch(

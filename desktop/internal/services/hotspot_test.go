@@ -180,11 +180,9 @@ func TestHotspotSessionConfigIsBoundToActiveSession(t *testing.T) {
 	if err != nil || got != config {
 		t.Fatal("wrong active credentials", got, err)
 	}
-	for _, value := range []any{s.HotspotStatus(), aiHotspotSummary(s.HotspotStatus())} {
-		data, err := json.Marshal(value)
-		if err != nil || strings.Contains(string(data), config.Password) || strings.Contains(string(data), "password") {
-			t.Fatal("session credentials leaked into status")
-		}
+	data, err := json.Marshal(s.HotspotStatus())
+	if err != nil || strings.Contains(string(data), config.Password) || strings.Contains(string(data), "password") {
+		t.Fatal("session credentials leaked into status")
 	}
 	for _, id := range []string{"", "session-b"} {
 		if got, err := s.HotspotSessionConfig(id); err == nil || got.Password != "" {

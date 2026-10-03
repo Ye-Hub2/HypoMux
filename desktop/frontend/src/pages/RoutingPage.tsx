@@ -159,12 +159,6 @@ export function RoutingPage() {
   const [activeType, setActiveType] = useState<MatchType>("process");
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<Set<TableRowId>>(new Set());
-  useEffect(() => {
-    if (!pageActive) return;
-    const selection = rules.filter(rule => selected.has(rule.id)).slice(0, 10).map(rule => ({ type: rule.match_type, value: rule.value, outbound: rule.outbound }));
-    window.dispatchEvent(new CustomEvent("hypomux:ai-selection", { detail: { page: "routing", selection: selection.length ? JSON.stringify(selection) : "" } }));
-    return () => { window.dispatchEvent(new CustomEvent("hypomux:ai-selection", { detail: { page: "routing", selection: "" } })); };
-  }, [rules, selected, pageActive]);
   const [newValue, setNewValue] = useState("");
   const [newOutbound, setNewOutbound] = useState("aggregation");
   const [loading, setLoading] = useState(true);
@@ -305,18 +299,6 @@ export function RoutingPage() {
   useEffect(() => {
     if (pageActive && !localEdits.current) void load(loaded.current);
   }, [load, pageActive]);
-
-  useEffect(() => {
-    const changed = () => {
-      if (pendingSave || saving) {
-        notify(text("AI 已更新配置", "AI updated the configuration"), text("当前仍有本地编辑，请先核对最新规则，避免覆盖 AI 的修改。", "Local edits are pending. Review the latest rules before overwriting AI changes."), "warning");
-      } else {
-        void load();
-      }
-    };
-    window.addEventListener("hypomux:ai-changed", changed);
-    return () => window.removeEventListener("hypomux:ai-changed", changed);
-  }, [load, pendingSave, saving, notify, text]);
 
   useEffect(() => () => {
     if (autosaveTimer.current !== undefined) window.clearTimeout(autosaveTimer.current);

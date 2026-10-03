@@ -50,11 +50,6 @@ export function ToolsPage() {
   }, [detail, loading, saving, enabled, revision, pageActive]);
   const navigate = (next: false | "steam" | "hotspot") => { navigated.current = true; if (next) lastDetail.current = next; setDetail(next); };
   useEffect(() => {
-    const changed = () => setRevision(value => value + 1);
-    window.addEventListener("hypomux:ai-changed", changed);
-    return () => window.removeEventListener("hypomux:ai-changed", changed);
-  }, []);
-  useEffect(() => {
     if (!pageActive || saving) return;
     let cancelled = false;
     setLoading(true);
