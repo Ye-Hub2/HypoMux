@@ -25,7 +25,6 @@ import {
 } from "./components/notifications/AppNotifications";
 
 const AppearanceLab = lazy(() => import("./pages/AppearanceLab").then((module) => ({ default: module.AppearanceLab })));
-const AboutPage = lazy(() => import("./pages/AboutPage").then((module) => ({ default: module.AboutPage })));
 const BlockedDomainsPage = lazy(() => import("./pages/BlockedDomainsPage").then((module) => ({ default: module.BlockedDomainsPage })));
 const HealthPage = lazy(() => import("./pages/HealthPage").then((module) => ({ default: module.HealthPage })));
 const ConnectionsPage = lazy(() => import("./pages/ConnectionsPage").then((module) => ({ default: module.ConnectionsPage })));
@@ -71,7 +70,7 @@ function HypoMuxWindow() {
       requested === "tools" || requested === "appearance" || requested === "routing" ||
       requested === "health" || requested === "connections" || requested === "virtual-adapters" ||
       requested === "settings" ||
-      requested === "blocked-domains" || requested === "about"
+      requested === "blocked-domains"
     )) {
       return requested;
     }
@@ -86,14 +85,13 @@ function HypoMuxWindow() {
   const { fluentTheme, settings } = useAppearance();
   const pageOrder: AppPage[] = [
     "home",
+    "virtual-adapters",
     "routing",
     "health",
     "connections",
-    "virtual-adapters",
     "tools",
     "settings",
     "blocked-domains",
-    "about",
     "appearance",
   ];
 
@@ -147,10 +145,8 @@ function HypoMuxWindow() {
           <Suspense fallback={<div className="page-loading"><Spinner size="small" label={locale === "en" ? "Loading page…" : "正在加载页面…"} /></div>}>
           {target === "appearance" && import.meta.env.DEV
             ? <AppearanceLab />
-            : target === "about"
-              ? <AboutPage />
-              : target === "tools"
-                ? <ToolsPage />
+            : target === "tools"
+              ? <ToolsPage />
               : target === "settings"
                 ? <SettingsPage
                   adapterRuntime={connectionAdapters}
@@ -158,19 +154,19 @@ function HypoMuxWindow() {
                 />
                 : target === "blocked-domains"
                   ? <BlockedDomainsPage onBack={() => navigate("settings")} />
-            : target === "health"
-              ? <HealthPage adapterRuntime={connectionAdapters} enginePhase={enginePhase} />
-              : target === "connections"
-                ? <ConnectionsPage
-                  initialAdapter={connectionsNavigation.adapter}
-                  adapterRevision={connectionsNavigation.revision}
-                  adapterRuntime={connectionAdapters ?? []}
-                />
-            : target === "virtual-adapters"
-                ? <VirtualAdaptersPage />
-            : target === "routing"
-              ? <RoutingPage />
-              : null}
+                  : target === "health"
+                    ? <HealthPage adapterRuntime={connectionAdapters} enginePhase={enginePhase} />
+                    : target === "connections"
+                      ? <ConnectionsPage
+                        initialAdapter={connectionsNavigation.adapter}
+                        adapterRevision={connectionsNavigation.revision}
+                        adapterRuntime={connectionAdapters ?? []}
+                      />
+                      : target === "virtual-adapters"
+                        ? <VirtualAdaptersPage />
+                        : target === "routing"
+                          ? <RoutingPage />
+                          : null}
           </Suspense>
           )}
         />

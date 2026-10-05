@@ -25,7 +25,7 @@ func run() error {
 	write := flag.Bool("write", false, "synchronize version metadata")
 	check := flag.Bool("check", false, "verify version metadata without changing files")
 	notes := flag.Bool("notes", false, "require nonempty versioned release notes")
-	output := flag.String("github-output", "", "append version/channel outputs to this file")
+	output := flag.String("github-output", "", "append version outputs to this file")
 	flag.Parse()
 	if flag.NArg() != 0 || (*write && *check) || (*tag != "" && *version != "") {
 		return fmt.Errorf("invalid or conflicting arguments")
@@ -63,7 +63,7 @@ func run() error {
 			return err
 		}
 	}
-	metadata := fmt.Sprintf("version=%s\nwindows_version=%s\nprerelease=%t\nmake_latest=%t\nchannel=%s\n", v, v.Windows(), v.Prerelease(), !v.Prerelease(), v.Channel())
+	metadata := fmt.Sprintf("version=%s\nwindows_version=%s\nprerelease=%t\nmake_latest=%t\n", v, v.Windows(), v.Prerelease(), !v.Prerelease())
 	if *output != "" {
 		file, err := os.OpenFile(*output, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {

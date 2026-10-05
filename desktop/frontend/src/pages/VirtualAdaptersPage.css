@@ -95,6 +95,108 @@
   text-transform: uppercase;
 }
 
+/* Multi-select adds a leading checkbox cell. It has to be its own column
+ * (rather than padded inside the name cell) so the checkbox stays aligned
+ * vertically across rows and the name column does not jump when the mode is
+ * entered. Protected rows render an EMPTY cell, so the column never shifts by
+ * one row. */
+.virtual-adapters-row.is-selecting {
+  grid-template-columns:
+    28px
+    minmax(140px, 0.65fr)
+    minmax(220px, 1.4fr)
+    minmax(100px, 0.55fr)
+    minmax(260px, 1.6fr);
+}
+
+.virtual-adapters-row-select {
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Selection mode: the whole row is the hit target, matching the Home page where
+ * clicking anywhere on a card toggles it. Without the pointer and the hover
+ * tint the row still works, but nothing tells the user it is clickable — and an
+ * affordance you have to guess at is the one they will not find. */
+.virtual-adapters-row.is-clickable {
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.virtual-adapters-row.is-clickable:hover {
+  background: var(--hm-row-hover);
+  border-color: var(--hm-outer-border);
+}
+
+/* Identity fields shown in the confirm dialog for an adapter this tool does
+ * not own: the user has to be able to tell which of five NICs on the host they
+ * are about to delete, and a bare sentence cannot do that. */
+.virtual-adapter-details {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--hm-density-space));
+  margin: calc(6px * var(--hm-density-space)) 0 0;
+}
+
+.virtual-adapter-details > div {
+  display: flex;
+  gap: calc(8px * var(--hm-density-space));
+  font-size: 0.9em;
+}
+
+.virtual-adapter-details dt {
+  flex: 0 0 auto;
+  color: var(--hm-text-secondary, inherit);
+}
+
+.virtual-adapter-details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The batch confirm lists every selected adapter by name. It is a real list,
+ * not a comma-joined sentence: a 9-name batch on one wrapped line is unreadable,
+ * and the user is checking names one by one. */
+.virtual-adapter-selection {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--hm-density-space));
+  max-height: 40vh;
+  margin: calc(6px * var(--hm-density-space)) 0 0;
+  padding: calc(6px * var(--hm-density-space)) calc(8px * var(--hm-density-space));
+  overflow-y: auto;
+  border: 1px solid var(--hm-border-subtle, rgba(127, 127, 127, 0.24));
+  border-radius: calc(6px * var(--hm-density-space));
+  list-style: none;
+}
+
+.virtual-adapter-selection > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(8px * var(--hm-density-space));
+  min-width: 0;
+}
+
+.virtual-adapter-selection small {
+  color: var(--hm-text-secondary, inherit);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+/* The "not created by HypoMux" marker inside the batch list. Not an error
+ * colour: it is a fact about the row, and the batch may contain a healthy mix
+ * of ours and the user's. The loud warning about them lives below the list. */
+.virtual-adapter-flag {
+  padding: 0 calc(6px * var(--hm-density-space));
+  border: 1px solid var(--hm-warning-border, rgba(196, 89, 17, 0.28));
+  border-radius: calc(4px * var(--hm-density-space));
+  font-size: 0.8em;
+  color: var(--hm-text-secondary, inherit);
+}
+
 .virtual-adapters-row > span {
   display: flex;
   flex-direction: column;
@@ -121,6 +223,10 @@
   color: var(--hm-danger-foreground, #b10e1c);
 }
 
+/* Inside the quota MessageBar the two sentences are siblings in a normal
+ * flow, not flex items, so flex-basis alone leaves them jammed on one line. */
+.MessageBarBody .virtual-adapter-error { display: block; margin-top: 2px; }
+
 .virtual-adapter-fields {
   display: flex;
   flex-direction: column;
@@ -136,6 +242,16 @@
 @media (max-width: 900px) {
   .virtual-adapters-row {
     grid-template-columns: 1fr;
+  }
+
+  /* Specificity ties with .is-selecting above would lose to it, so the stacked
+     layout has to opt in explicitly. */
+  .virtual-adapters-row.is-selecting {
+    grid-template-columns: 1fr;
+  }
+
+  .virtual-adapters-row-select {
+    justify-content: flex-start;
   }
 
   .virtual-adapters-row.is-header {

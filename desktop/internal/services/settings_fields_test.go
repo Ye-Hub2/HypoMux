@@ -8,44 +8,25 @@ import (
 	"testing"
 )
 
-func TestUpdateChannelPersistsAndDefaultsSafely(t *testing.T) {
+func TestLegacyUpdateChannelFieldIsIgnored(t *testing.T) {
+	// The in-app update chain is gone, so AppSettings no longer carries an
+	// update channel. Configs written by older builds must still load: the
+	// decoder ignores unknown keys instead of failing the whole file.
 	dir := t.TempDir()
 	t.Setenv("HYPOMUX_DATA_DIR", dir)
-	s := NewSettingsService()
-	if s.Get().UpdateChannel != "stable" {
-		t.Fatal("fresh installs must use stable")
-	}
-	before := s.Get()
-	if _, err := s.UpdateFields(AppSettings{UpdateChannel: "preview"}, []string{"update_channel"}); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(dir, "settings.json"),
+		[]byte(`{"mode":"proxy","socks_port":12080,"update_channel":"preview"}`),
+		0600,
+	); err != nil {
 		t.Fatal(err)
 	}
-	if NewSettingsService().Get().UpdateChannel != "preview" {
-		t.Fatal("channel not persisted")
+	loaded := NewSettingsService().Get()
+	if loaded.Mode != "proxy" || loaded.SOCKSPort != 12080 {
+		t.Fatalf("legacy update_channel broke loading: %+v", loaded)
 	}
-	if _, err := s.UpdateFields(AppSettings{UpdateChannel: "beta"}, []string{"update_channel"}); err == nil {
-		t.Fatal("invalid channel accepted")
-	}
-	if s.Get().UpdateChannel != "preview" {
-		t.Fatal("rejected channel changed state")
-	}
-	before.UpdateChannel = "" // Full replacements from older bindings preserve the preference.
-	if got, err := s.Update(before); err != nil || got.UpdateChannel != "preview" {
-		t.Fatalf("legacy update lost channel: %+v %v", got, err)
-	}
-	if _, err := s.UpdateFields(AppSettings{UpdateChannel: "stable"}, []string{"update_channel"}); err != nil {
-		t.Fatal(err)
-	}
-	if NewSettingsService().Get().UpdateChannel != "stable" {
-		t.Fatal("switching back not persisted")
-	}
-	// Old or corrupted channel values must never opt users into prereleases.
-	for _, data := range []string{`{}`, `{"update_channel":"unknown"}`} {
-		if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(data), 0600); err != nil {
-			t.Fatal(err)
-		}
-		if NewSettingsService().Get().UpdateChannel != "stable" {
-			t.Fatal("legacy channel did not default to stable")
-		}
+	if _, err := NewSettingsService().UpdateFields(AppSettings{}, []string{"update_channel"}); err == nil {
+		t.Fatal("removed update_channel field is still accepted by the settings page")
 	}
 }
 

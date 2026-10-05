@@ -13,7 +13,7 @@ import { adapterSaveInput, adapterSaveQueue } from "../platform/adapterSaveQueue
 import { startSerialPoll } from "../platform/serialPoll";
 import { adapterListKey } from "./adapterRuntime";
 import { SYSTEM_PROXY_TAKEOVER_EVENT } from "./systemProxyTakeover";
-import { ADAPTER_VISIBILITY_EVENT, selectVisibleAdapters, visibleHomeAdapters } from "./adapterVisibility";
+import { selectVisibleAdapters, visibleHomeAdapters } from "./adapterVisibility";
 
 export type EnginePhase = "stopped" | "starting" | "running" | "degraded" | "stopping" | "failed";
 export type EngineMode = "proxy" | "tun";
@@ -172,7 +172,7 @@ export function useEngineState(
   const [preview, setPreview] = useState(false);
   const [ports, setPorts] = useState({ socks: 10800, http: 10801 });
   const [systemProxyTakeover, setSystemProxyTakeover] = useState(true);
-  const [hideVirtualAdapters, setHideVirtualAdapters] = useState(true);
+  const [hideVirtualAdapters, setHideVirtualAdapters] = useState(false);
   const [history, setHistory] = useState<number[]>(Array.from({ length: 18 }, () => 0));
   const [diagnostics, setDiagnostics] = useState<DiagnosticResult[]>([]);
   const mounted = useRef(true);
@@ -292,7 +292,7 @@ export function useEngineState(
       weightedRef.current = settings.weighted;
       setPorts({ socks: settings.socks_port, http: settings.http_port });
       setSystemProxyTakeover(settings.system_proxy_takeover);
-      setHideVirtualAdapters(settings.hide_virtual_adapters ?? true);
+      setHideVirtualAdapters(settings.hide_virtual_adapters ?? false);
       setPreview(false);
     } catch (error) {
       if (showError) {
@@ -347,15 +347,6 @@ export function useEngineState(
     };
     window.addEventListener(SYSTEM_PROXY_TAKEOVER_EVENT, handleTakeoverChange);
     return () => window.removeEventListener(SYSTEM_PROXY_TAKEOVER_EVENT, handleTakeoverChange);
-  }, []);
-
-  useEffect(() => {
-    const onVisibilityChange = (event: Event) => {
-      const enabled = (event as CustomEvent<boolean>).detail;
-      if (typeof enabled === "boolean") setHideVirtualAdapters(enabled);
-    };
-    window.addEventListener(ADAPTER_VISIBILITY_EVENT, onVisibilityChange);
-    return () => window.removeEventListener(ADAPTER_VISIBILITY_EVENT, onVisibilityChange);
   }, []);
 
   const persistAdapters = useCallback((next: AdapterView[], nextMode = modeRef.current, nextWeighted = weightedRef.current, nextStrategy = strategyRef.current) => {
@@ -580,6 +571,7 @@ export function useEngineState(
   return {
     visibleAdapters,
     adapterFeedback,
+    hideVirtualAdapters,
     hiddenAdapterCount: homeAdapters.length - visibleAdapters.length,
     hiddenSelectedCount: hideVirtualAdapters ? selected.filter((adapter) => adapter.is_virtual).length : 0,
     phase, mode, weighted, strategy, adapters: homeAdapters, selected, totalWeight, history,
@@ -592,5 +584,6 @@ export function useEngineState(
     totalConnections: snapshot.connections,
     sessionBytes: snapshot.session_bytes,
     setMode, setWeighted, setStrategy, toggleEngine, toggleAdapter, updateWeight, selectAll, refreshAdapters,
+    setHideVirtualAdapters,
   };
 }

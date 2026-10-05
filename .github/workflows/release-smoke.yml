@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   smoke:
-    name: Verify signing key and CNB mirror
+    name: Verify CNB tag mirror and release access
     runs-on: ubuntu-latest
 
     steps:
@@ -27,27 +27,14 @@ jobs:
           go-version-file: desktop/go.mod
           cache: false
 
-      - name: Resolve release channel
+      # Exercises the exact command the publish job runs, so a malformed or
+      # unknown tag fails here before any release job is dispatched.
+      - name: Resolve release version metadata
         id: version
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: go -C desktop run ./cmd/release-version -tag "${RELEASE_TAG}" -github-output "${GITHUB_OUTPUT}"
-
-      - name: Verify manifest signing secret matches embedded public key
-        shell: bash
-        env:
-          UPDATE_MANIFEST_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_MANIFEST_ED25519_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p smoke
-          printf '%s\n' '{"schema_version":1,"smoke_test":true}' > smoke/latest.json
-          public_key="$(tr -d '\r\n' < desktop/internal/services/update_manifest_ed25519_public_key.txt)"
-          go -C desktop run ./cmd/update-manifest-sign \
-            -input ../smoke/latest.json \
-            -output ../smoke/latest.json.sig \
-            -verify-public-key "${public_key}"
-          test "$(stat -c%s smoke/latest.json.sig)" -eq 64
 
       - name: Verify GitHub tag is mirrored to CNB at the same commit
         shell: bash
@@ -102,43 +89,3 @@ jobs:
             git-cnb --repo=Hypostasis-Cat/HypoMux \
             release get -t "${RELEASE_TAG}" >/dev/null
           echo "CNB Release ${RELEASE_TAG} is readable; no assets were created or uploaded."
-
-      - name: Verify existing signed update channel is readable and identical
-        shell: bash
-        run: |
-          set -euo pipefail
-          channel_ref="refs/heads/${{ steps.version.outputs.channel }}"
-          github_channel="$(git ls-remote https://github.com/Hypostasis-Cat/HypoMux.git "${channel_ref}" | awk 'NR == 1 {print $1}')"
-          cnb_channel="$(git ls-remote https://cnb.cool/Hypostasis-Cat/HypoMux "${channel_ref}" | awk 'NR == 1 {print $1}')"
-          if [[ -z "${github_channel}" && -z "${cnb_channel}" ]]; then
-            echo "update-channel does not exist yet; raw endpoint verification is not applicable."
-            exit 0
-          fi
-          if [[ -z "${github_channel}" || -z "${cnb_channel}" || "${github_channel}" != "${cnb_channel}" ]]; then
-            echo "update-channel refs differ: GitHub=${github_channel:-missing} CNB=${cnb_channel:-missing}."
-            exit 1
-          fi
-
-          mkdir -p smoke/channel
-          curl --fail --silent --show-error --location \
-            --output smoke/channel/github-latest.json \
-            "https://raw.githubusercontent.com/Hypostasis-Cat/HypoMux/${{ steps.version.outputs.channel }}/latest.json"
-          curl --fail --silent --show-error --location \
-            --output smoke/channel/github-latest.json.sig \
-            "https://raw.githubusercontent.com/Hypostasis-Cat/HypoMux/${{ steps.version.outputs.channel }}/latest.json.sig"
-          curl --fail --silent --show-error --location \
-            --output smoke/channel/cnb-latest.json \
-            "https://cnb.cool/Hypostasis-Cat/HypoMux/-/git/raw/${{ steps.version.outputs.channel }}/latest.json"
-          curl --fail --silent --show-error --location \
-            --output smoke/channel/cnb-latest.json.sig \
-            "https://cnb.cool/Hypostasis-Cat/HypoMux/-/git/raw/${{ steps.version.outputs.channel }}/latest.json.sig"
-          cmp --silent smoke/channel/github-latest.json smoke/channel/cnb-latest.json
-          cmp --silent smoke/channel/github-latest.json.sig smoke/channel/cnb-latest.json.sig
-
-          public_key="$(tr -d '\r\n' < desktop/internal/services/update_manifest_ed25519_public_key.txt)"
-          go -C desktop run ./cmd/update-manifest-sign \
-            -verify-only \
-            -input ../smoke/channel/github-latest.json \
-            -output ../smoke/channel/github-latest.json.sig \
-            -verify-public-key "${public_key}"
-          echo "Both raw update channels are byte-identical and the Ed25519 signature is valid."

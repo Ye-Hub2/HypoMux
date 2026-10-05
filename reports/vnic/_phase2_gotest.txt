@@ -1,0 +1,998 @@
+=== RUN   TestVirtualAdapterClassification
+--- PASS: TestVirtualAdapterClassification (0.00s)
+=== RUN   TestHideVirtualAdaptersDefaultsAndPersistence
+--- PASS: TestHideVirtualAdaptersDefaultsAndPersistence (0.01s)
+=== RUN   TestHideVirtualAdaptersExplicitChoiceSurvivesReload
+=== RUN   TestHideVirtualAdaptersExplicitChoiceSurvivesReload/persisted=true
+=== RUN   TestHideVirtualAdaptersExplicitChoiceSurvivesReload/persisted=false
+--- PASS: TestHideVirtualAdaptersExplicitChoiceSurvivesReload (0.01s)
+    --- PASS: TestHideVirtualAdaptersExplicitChoiceSurvivesReload/persisted=true (0.01s)
+    --- PASS: TestHideVirtualAdaptersExplicitChoiceSurvivesReload/persisted=false (0.01s)
+=== RUN   TestIsHypoMuxManagedAdapter
+--- PASS: TestIsHypoMuxManagedAdapter (0.00s)
+=== RUN   TestAdaptiveSchedulingPersistenceAndLegacySelection
+--- PASS: TestAdaptiveSchedulingPersistenceAndLegacySelection (0.10s)
+=== RUN   TestAdaptiveModePersistencePreservesStrategy
+--- PASS: TestAdaptiveModePersistencePreservesStrategy (0.00s)
+=== RUN   TestAppearancePersistsBackgroundOutsideJSONAndReloadsIt
+--- PASS: TestAppearancePersistsBackgroundOutsideJSONAndReloadsIt (0.04s)
+=== RUN   TestAppearanceRequiresBytesForFirstLocalBackgroundSave
+--- PASS: TestAppearanceRequiresBytesForFirstLocalBackgroundSave (0.00s)
+=== RUN   TestAppearanceUsesActualBackgroundTypeWhenMIMEIsWrong
+--- PASS: TestAppearanceUsesActualBackgroundTypeWhenMIMEIsWrong (0.01s)
+=== RUN   TestAppearanceJSONFailurePreservesOldBackgroundAndRestart
+--- PASS: TestAppearanceJSONFailurePreservesOldBackgroundAndRestart (0.01s)
+=== RUN   TestAppearanceSuccessfulReplacementAndLegacyBackground
+--- PASS: TestAppearanceSuccessfulReplacementAndLegacyBackground (0.03s)
+=== RUN   TestBlockedDomainServiceReadsLegacyListAndPersistsRemovals
+--- PASS: TestBlockedDomainServiceReadsLegacyListAndPersistsRemovals (0.01s)
+=== RUN   TestCompatibilityCatalogIsDeterministicAndContainsLegacySafetyProfiles
+--- PASS: TestCompatibilityCatalogIsDeterministicAndContainsLegacySafetyProfiles (0.00s)
+=== RUN   TestFetchClashConnectionDetails
+--- PASS: TestFetchClashConnectionDetails (0.00s)
+=== RUN   TestMatchClashConnectionsUsesTargetAndStartTime
+--- PASS: TestMatchClashConnectionsUsesTargetAndStartTime (0.00s)
+=== RUN   TestMatchClashConnectionsDoesNotReuseOneFlow
+--- PASS: TestMatchClashConnectionsDoesNotReuseOneFlow (0.00s)
+=== RUN   TestMatchClashConnectionsKeepsDomainWithoutProcess
+--- PASS: TestMatchClashConnectionsKeepsDomainWithoutProcess (0.00s)
+=== RUN   TestMatchClashConnectionsRestoresDomainWhenFakeIPDiffersFromCoreTarget
+--- PASS: TestMatchClashConnectionsRestoresDomainWhenFakeIPDiffersFromCoreTarget (0.00s)
+=== RUN   TestMatchClashConnectionsDoesNotGuessAcrossWideStartGap
+--- PASS: TestMatchClashConnectionsDoesNotGuessAcrossWideStartGap (0.00s)
+=== RUN   TestNetworkPortDecoding
+--- PASS: TestNetworkPortDecoding (0.00s)
+=== RUN   TestSortConnectionViewsKeepsTelemetryOrderStable
+--- PASS: TestSortConnectionViewsKeepsTelemetryOrderStable (0.00s)
+=== RUN   TestConnectionOutboundClassification
+--- PASS: TestConnectionOutboundClassification (0.00s)
+=== RUN   TestSplitConnectionEndpoint
+--- PASS: TestSplitConnectionEndpoint (0.00s)
+=== RUN   TestDiagnosticsUsesBoundTCPAsAuthoritativeResult
+--- PASS: TestDiagnosticsUsesBoundTCPAsAuthoritativeResult (0.04s)
+=== RUN   TestTCPFailureDoesNotInventICMPLoss
+--- PASS: TestTCPFailureDoesNotInventICMPLoss (0.00s)
+=== RUN   TestDiagnosticsCanBeCancelled
+--- PASS: TestDiagnosticsCanBeCancelled (0.03s)
+=== RUN   TestRealWindowsAdapterDiagnostic
+    diagnostics_windows_integration_test.go:13: set HYPOMUX_RUN_DIAGNOSTIC_TEST=1 for the explicit Windows adapter diagnostic
+--- SKIP: TestRealWindowsAdapterDiagnostic (0.00s)
+=== RUN   TestWFPCompatibilityClassifierIsStrict
+--- PASS: TestWFPCompatibilityClassifierIsStrict (0.00s)
+=== RUN   TestRealProxyStartStopAndNetworkRestore
+    engine_integration_test.go:11: set HYPOMUX_RUN_NETWORK_TEST=1 for the explicit Windows network lifecycle check
+--- SKIP: TestRealProxyStartStopAndNetworkRestore (0.00s)
+=== RUN   TestShouldRecordPerformance
+=== RUN   TestShouldRecordPerformance/below_threshold
+=== RUN   TestShouldRecordPerformance/first_high_throughput_sample
+=== RUN   TestShouldRecordPerformance/rate_limited
+=== RUN   TestShouldRecordPerformance/interval_elapsed
+--- PASS: TestShouldRecordPerformance (0.00s)
+    --- PASS: TestShouldRecordPerformance/below_threshold (0.00s)
+    --- PASS: TestShouldRecordPerformance/first_high_throughput_sample (0.00s)
+    --- PASS: TestShouldRecordPerformance/rate_limited (0.00s)
+    --- PASS: TestShouldRecordPerformance/interval_elapsed (0.00s)
+=== RUN   TestSystemProxyTakeoverPolicy
+--- PASS: TestSystemProxyTakeoverPolicy (0.00s)
+=== RUN   TestElevatedDifferentUserBlocksSystemProxyBeforeAdapterDiscovery
+--- PASS: TestElevatedDifferentUserBlocksSystemProxyBeforeAdapterDiscovery (0.28s)
+=== RUN   TestElevatedSameUserCanProceedPastPrivilegeGate
+--- PASS: TestElevatedSameUserCanProceedPastPrivilegeGate (0.07s)
+=== RUN   TestElevatedDifferentUserCanUseLocalProxyPortsWithoutTakeover
+--- PASS: TestElevatedDifferentUserCanUseLocalProxyPortsWithoutTakeover (0.07s)
+=== RUN   TestThroughputSharedSamplingWindow
+--- PASS: TestThroughputSharedSamplingWindow (0.00s)
+=== RUN   TestThroughputResetsBaseline
+=== RUN   TestThroughputResetsBaseline/restart
+=== RUN   TestThroughputResetsBaseline/counter_reset
+=== RUN   TestThroughputResetsBaseline/long_gap
+=== RUN   TestThroughputResetsBaseline/adapter_reset
+--- PASS: TestThroughputResetsBaseline (0.00s)
+    --- PASS: TestThroughputResetsBaseline/restart (0.00s)
+    --- PASS: TestThroughputResetsBaseline/counter_reset (0.00s)
+    --- PASS: TestThroughputResetsBaseline/long_gap (0.00s)
+    --- PASS: TestThroughputResetsBaseline/adapter_reset (0.00s)
+=== RUN   TestHotspotPreferencesEncryptedRoundTrip
+--- PASS: TestHotspotPreferencesEncryptedRoundTrip (0.02s)
+=== RUN   TestHotspotStatusLoggingIsDeduplicatedAndPrivate
+--- PASS: TestHotspotStatusLoggingIsDeduplicatedAndPrivate (0.02s)
+=== RUN   TestHotspotConfigValidation
+=== RUN   TestHotspotConfigValidation/blank
+=== RUN   TestHotspotConfigValidation/ssid_bytes
+=== RUN   TestHotspotConfigValidation/ssid_newline
+=== RUN   TestHotspotConfigValidation/short_password
+=== RUN   TestHotspotConfigValidation/unicode_password
+=== RUN   TestHotspotConfigValidation/band
+--- PASS: TestHotspotConfigValidation (0.00s)
+    --- PASS: TestHotspotConfigValidation/blank (0.00s)
+    --- PASS: TestHotspotConfigValidation/ssid_bytes (0.00s)
+    --- PASS: TestHotspotConfigValidation/ssid_newline (0.00s)
+    --- PASS: TestHotspotConfigValidation/short_password (0.00s)
+    --- PASS: TestHotspotConfigValidation/unicode_password (0.00s)
+    --- PASS: TestHotspotConfigValidation/band (0.00s)
+=== RUN   TestHotspotRetryRechecksLivePrerequisitesAfterFailedCleanup
+--- PASS: TestHotspotRetryRechecksLivePrerequisitesAfterFailedCleanup (0.00s)
+=== RUN   TestHotspotWorkerProcess
+--- PASS: TestHotspotWorkerProcess (0.00s)
+=== RUN   TestHotspotWorkerBrokersSharingInspection
+--- PASS: TestHotspotWorkerBrokersSharingInspection (0.06s)
+=== RUN   TestHotspotWorkerStopsOnPipeClose
+--- PASS: TestHotspotWorkerStopsOnPipeClose (0.02s)
+=== RUN   TestHotspotSessionConfigIsBoundToActiveSession
+--- PASS: TestHotspotSessionConfigIsBoundToActiveSession (0.00s)
+=== RUN   TestHotspotExpectedShutdownDoesNotHideCleanupFailure
+=== RUN   TestHotspotExpectedShutdownDoesNotHideCleanupFailure/stop-error
+=== RUN   TestHotspotExpectedShutdownDoesNotHideCleanupFailure/cleanup-failure
+=== RUN   TestHotspotExpectedShutdownDoesNotHideCleanupFailure/restore-failure
+--- PASS: TestHotspotExpectedShutdownDoesNotHideCleanupFailure (0.06s)
+    --- PASS: TestHotspotExpectedShutdownDoesNotHideCleanupFailure/stop-error (0.02s)
+    --- PASS: TestHotspotExpectedShutdownDoesNotHideCleanupFailure/cleanup-failure (0.02s)
+    --- PASS: TestHotspotExpectedShutdownDoesNotHideCleanupFailure/restore-failure (0.02s)
+=== RUN   TestHotspotRepeatedStartStopSessions
+--- PASS: TestHotspotRepeatedStartStopSessions (0.09s)
+=== RUN   TestHotspotWorkerRejectsWrongSharedEgress
+--- PASS: TestHotspotWorkerRejectsWrongSharedEgress (0.02s)
+=== RUN   TestHotspotPublishesStartingSessionBeforeReadiness
+--- PASS: TestHotspotPublishesStartingSessionBeforeReadiness (0.02s)
+=== RUN   TestHotspotWorkerDoesNotAcceptUnverifiedRunningState
+--- PASS: TestHotspotWorkerDoesNotAcceptUnverifiedRunningState (1.00s)
+=== RUN   TestHotspotWorkerKeepsOperationalUnverifiedHotspot
+--- PASS: TestHotspotWorkerKeepsOperationalUnverifiedHotspot (0.02s)
+=== RUN   TestHotspotWorkerCrashClearsVerifiedState
+--- PASS: TestHotspotWorkerCrashClearsVerifiedState (0.02s)
+=== RUN   TestHotspotWindowsSharingVerdictAndPrivateReadiness
+--- PASS: TestHotspotWindowsSharingVerdictAndPrivateReadiness (0.67s)
+=== RUN   TestHotspotWindowsReusedInterfaceAndStability
+--- PASS: TestHotspotWindowsReusedInterfaceAndStability (0.34s)
+=== RUN   TestHotspotWindowsSharingRetryAndCadence
+--- PASS: TestHotspotWindowsSharingRetryAndCadence (0.27s)
+=== RUN   TestHotspotWindowsCleanupOutcomes
+--- PASS: TestHotspotWindowsCleanupOutcomes (0.30s)
+=== RUN   TestHotspotWindowsIgnoresUnreadySiblingInterfaces
+--- PASS: TestHotspotWindowsIgnoresUnreadySiblingInterfaces (0.35s)
+=== RUN   TestHotspotWindowsTunProfileDiscovery
+--- PASS: TestHotspotWindowsTunProfileDiscovery (0.35s)
+=== RUN   TestHotspotWindowsBandAPIVersionCompatibility
+--- PASS: TestHotspotWindowsBandAPIVersionCompatibility (0.30s)
+=== RUN   TestHotspotWindowsAutomaticBandStartup
+--- PASS: TestHotspotWindowsAutomaticBandStartup (0.35s)
+=== RUN   TestHotspotWindowsRejectsMissingTUNWithoutMutation
+--- PASS: TestHotspotWindowsRejectsMissingTUNWithoutMutation (3.02s)
+=== RUN   TestNormalizeHypervMAC
+--- PASS: TestNormalizeHypervMAC (0.00s)
+=== RUN   TestFormatHypervMAC
+--- PASS: TestFormatHypervMAC (0.00s)
+=== RUN   TestHypervMACEqual
+--- PASS: TestHypervMACEqual (0.00s)
+=== RUN   TestIsHyperVAdapterName
+--- PASS: TestIsHyperVAdapterName (0.00s)
+=== RUN   TestHypervAdapterSequence
+--- PASS: TestHypervAdapterSequence (0.00s)
+=== RUN   TestHypervHostInterfaceName
+--- PASS: TestHypervHostInterfaceName (0.00s)
+=== RUN   TestHypervObjectNameFromInterface
+--- PASS: TestHypervObjectNameFromInterface (0.00s)
+=== RUN   TestHypervMACValueLocalAdministration
+--- PASS: TestHypervMACValueLocalAdministration (0.00s)
+=== RUN   TestHypervLedgerAllocateNamesNoReuse
+--- PASS: TestHypervLedgerAllocateNamesNoReuse (0.00s)
+=== RUN   TestHypervLedgerFirstSequenceStartsAtOne
+--- PASS: TestHypervLedgerFirstSequenceStartsAtOne (0.00s)
+=== RUN   TestHypervLedgerNormalizeKeepsAlreadyIssuedZeroSequence
+--- PASS: TestHypervLedgerNormalizeKeepsAlreadyIssuedZeroSequence (0.00s)
+=== RUN   TestHypervLedgerRoundTrip
+--- PASS: TestHypervLedgerRoundTrip (0.01s)
+=== RUN   TestLoadHypervLedgerCorrupt
+--- PASS: TestLoadHypervLedgerCorrupt (0.00s)
+=== RUN   TestHypervLedgerFindAndUpsert
+--- PASS: TestHypervLedgerFindAndUpsert (0.00s)
+=== RUN   TestHypervCheckBatchCapacity
+--- PASS: TestHypervCheckBatchCapacity (0.00s)
+=== RUN   TestDeriveHyperVState
+--- PASS: TestDeriveHyperVState (0.00s)
+=== RUN   TestHypervEntryExpired
+--- PASS: TestHypervEntryExpired (0.00s)
+=== RUN   TestBuildHyperVStatus
+--- PASS: TestBuildHyperVStatus (0.00s)
+=== RUN   TestBuildUnmanagedHyperVStatus
+--- PASS: TestBuildUnmanagedHyperVStatus (0.00s)
+=== RUN   TestHypervInventoryFind
+--- PASS: TestHypervInventoryFind (0.00s)
+=== RUN   TestScanHypervHostInterfacesCoversHost
+--- PASS: TestScanHypervHostInterfacesCoversHost (0.05s)
+=== RUN   TestCreateRejectsInvalidArguments
+--- PASS: TestCreateRejectsInvalidArguments (0.00s)
+=== RUN   TestRemoveRejectsForeignAdapters
+--- PASS: TestRemoveRejectsForeignAdapters (0.00s)
+=== RUN   TestRemoveAfterShutdown
+--- PASS: TestRemoveAfterShutdown (0.00s)
+=== RUN   TestHypervPoolKeyNormalizesObjectNameAndAlias
+--- PASS: TestHypervPoolKeyNormalizesObjectNameAndAlias (0.00s)
+=== RUN   TestHypervObjectNameOrSelfNeverDoubleWraps
+--- PASS: TestHypervObjectNameOrSelfNeverDoubleWraps (0.00s)
+=== RUN   TestApplyPoolUpdateDoesNotMutateCallerSlice
+--- PASS: TestApplyPoolUpdateDoesNotMutateCallerSlice (0.00s)
+=== RUN   TestApplyPoolUpdateCreateThenRemoveIsSymmetric
+--- PASS: TestApplyPoolUpdateCreateThenRemoveIsSymmetric (0.00s)
+=== RUN   TestApplyPoolUpdateMerge
+--- PASS: TestApplyPoolUpdateMerge (0.00s)
+=== RUN   TestReadHypervResultGuards
+--- PASS: TestReadHypervResultGuards (0.01s)
+=== RUN   TestReadHypervResultShape
+--- PASS: TestReadHypervResultShape (0.01s)
+=== RUN   TestMapHypervRunErrorCodes
+--- PASS: TestMapHypervRunErrorCodes (0.00s)
+=== RUN   TestHyperVErrorMessageCarriesCode
+--- PASS: TestHyperVErrorMessageCarriesCode (0.00s)
+=== RUN   TestToHyperVSwitchesSorted
+--- PASS: TestToHyperVSwitchesSorted (0.00s)
+=== RUN   TestSortHyperVStatuses
+--- PASS: TestSortHyperVStatuses (0.00s)
+=== RUN   TestNewHypervJobPathUnique
+--- PASS: TestNewHypervJobPathUnique (0.00s)
+=== RUN   TestHypervUTF16LE
+--- PASS: TestHypervUTF16LE (0.00s)
+=== RUN   TestHypervPowerShellScriptIsConstantAndSafe
+--- PASS: TestHypervPowerShellScriptIsConstantAndSafe (0.00s)
+=== RUN   TestApplyPoolUpdatePreservesSchedulingStrategy
+=== RUN   TestApplyPoolUpdatePreservesSchedulingStrategy/latency-first
+=== RUN   TestApplyPoolUpdatePreservesSchedulingStrategy/adaptive-throughput
+=== RUN   TestApplyPoolUpdatePreservesSchedulingStrategy/round-robin
+=== RUN   TestApplyPoolUpdatePreservesSchedulingStrategy/weighted
+--- PASS: TestApplyPoolUpdatePreservesSchedulingStrategy (0.02s)
+    --- PASS: TestApplyPoolUpdatePreservesSchedulingStrategy/latency-first (0.01s)
+    --- PASS: TestApplyPoolUpdatePreservesSchedulingStrategy/adaptive-throughput (0.00s)
+    --- PASS: TestApplyPoolUpdatePreservesSchedulingStrategy/round-robin (0.00s)
+    --- PASS: TestApplyPoolUpdatePreservesSchedulingStrategy/weighted (0.00s)
+=== RUN   TestRemoveKeepsLedgerWhenInventoryQueryFails
+--- PASS: TestRemoveKeepsLedgerWhenInventoryQueryFails (0.01s)
+=== RUN   TestHypervReadInventoryScriptIsConstantAndReadOnly
+--- PASS: TestHypervReadInventoryScriptIsConstantAndReadOnly (0.00s)
+=== RUN   TestHypervParseInventoryOutput
+=== RUN   TestHypervParseInventoryOutput/真实形状
+=== RUN   TestHypervParseInventoryOutput/空集合
+=== RUN   TestHypervParseInventoryOutput/脚本自报失败
+=== RUN   TestHypervParseInventoryOutput/BOM_与噪声
+=== RUN   TestHypervParseInventoryOutput/无输出
+=== RUN   TestHypervParseInventoryOutput/坏_JSON_必须把原文带回
+--- PASS: TestHypervParseInventoryOutput (0.00s)
+    --- PASS: TestHypervParseInventoryOutput/真实形状 (0.00s)
+    --- PASS: TestHypervParseInventoryOutput/空集合 (0.00s)
+    --- PASS: TestHypervParseInventoryOutput/脚本自报失败 (0.00s)
+    --- PASS: TestHypervParseInventoryOutput/BOM_与噪声 (0.00s)
+    --- PASS: TestHypervParseInventoryOutput/无输出 (0.00s)
+    --- PASS: TestHypervParseInventoryOutput/坏_JSON_必须把原文带回 (0.00s)
+=== RUN   TestHypervScriptOutcomeUncertain
+--- PASS: TestHypervScriptOutcomeUncertain (0.00s)
+=== RUN   TestHypervReconcileBatchTimeoutKeepsLedger
+--- PASS: TestHypervReconcileBatchTimeoutKeepsLedger (0.00s)
+=== RUN   TestHypervReconcileBatchReportedFailure
+--- PASS: TestHypervReconcileBatchReportedFailure (0.00s)
+=== RUN   TestHypervResolveAddressesScriptVerdictWins
+--- PASS: TestHypervResolveAddressesScriptVerdictWins (0.00s)
+=== RUN   TestHypervResolveAddressesSkipsAPIPAFallback
+--- PASS: TestHypervResolveAddressesSkipsAPIPAFallback (0.00s)
+=== RUN   TestHypervResolveAddressesIsolatesAliases
+--- PASS: TestHypervResolveAddressesIsolatesAliases (0.00s)
+=== RUN   TestHypervSeededCommandBodyPutsPayloadInVariable
+--- PASS: TestHypervSeededCommandBodyPutsPayloadInVariable (0.00s)
+=== RUN   TestHypervPowerShellArgumentsHaveNoTrailingToken
+--- PASS: TestHypervPowerShellArgumentsHaveNoTrailingToken (0.00s)
+=== RUN   TestHypervFailureErrorBoxesNilAsTrueNil
+--- PASS: TestHypervFailureErrorBoxesNilAsTrueNil (0.00s)
+=== RUN   TestLatencySchedulingPersistence
+--- PASS: TestLatencySchedulingPersistence (0.09s)
+=== RUN   TestMTUSearchBoundaries
+--- PASS: TestMTUSearchBoundaries (0.00s)
+=== RUN   TestMTUSearchDoesNotInterpretLossAsFragmentation
+--- PASS: TestMTUSearchDoesNotInterpretLossAsFragmentation (0.00s)
+=== RUN   TestMTUSearchCancellationAndVerification
+--- PASS: TestMTUSearchCancellationAndVerification (0.00s)
+=== RUN   TestMTUOriginalSurvivesRestartAndRepeatedChanges
+--- PASS: TestMTUOriginalSurvivesRestartAndRepeatedChanges (0.02s)
+=== RUN   TestMTUWindowsReadOnlySmoke
+    mtu_windows_test.go:17: set HYPOMUX_MTU_SMOKE_ADAPTER for read-only Windows smoke test
+--- SKIP: TestMTUWindowsReadOnlySmoke (0.00s)
+=== RUN   TestClassifyNAT
+--- PASS: TestClassifyNAT (0.00s)
+=== RUN   TestHostFirewallMakesRestrictiveFilteringInconclusive
+--- PASS: TestHostFirewallMakesRestrictiveFilteringInconclusive (0.00s)
+=== RUN   TestAllowedFirewallKeepsFilteringResult
+--- PASS: TestAllowedFirewallKeepsFilteringResult (0.00s)
+=== RUN   TestDiagnosticsNATRunPersistsResult
+--- PASS: TestDiagnosticsNATRunPersistsResult (0.00s)
+=== RUN   TestDiagnosticsNATRejectsRunWhileAggregationIsActive
+--- PASS: TestDiagnosticsNATRejectsRunWhileAggregationIsActive (0.00s)
+=== RUN   TestDiagnosticsNATCanBeCancelled
+--- PASS: TestDiagnosticsNATCanBeCancelled (0.00s)
+=== RUN   TestDiagnosticsNATRejectsConcurrentRun
+--- PASS: TestDiagnosticsNATRejectsConcurrentRun (0.00s)
+=== RUN   TestFirewallRuleAllowsProgramUDP
+--- PASS: TestFirewallRuleAllowsProgramUDP (0.00s)
+=== RUN   TestNATServerStorePersistsSelectionAndDeletion
+--- PASS: TestNATServerStorePersistsSelectionAndDeletion (0.00s)
+=== RUN   TestNormalizeNATServerAddress
+--- PASS: TestNormalizeNATServerAddress (0.00s)
+=== RUN   TestFirstUsableSTUNIPRejectsFakeIP
+--- PASS: TestFirstUsableSTUNIPRejectsFakeIP (0.00s)
+=== RUN   TestNetworkRouteTakeoverScenarios
+=== RUN   TestNetworkRouteTakeoverScenarios/installed_Radmin_backup
+=== RUN   TestNetworkRouteTakeoverScenarios/Radmin_preferred
+=== RUN   TestNetworkRouteTakeoverScenarios/equal_cost
+=== RUN   TestNetworkRouteTakeoverScenarios/interface_metric_included
+=== RUN   TestNetworkRouteTakeoverScenarios/disconnected_VPN
+=== RUN   TestNetworkRouteTakeoverScenarios/active_proxy
+=== RUN   TestNetworkRouteTakeoverScenarios/own_stale_backup
+=== RUN   TestNetworkRouteTakeoverScenarios/only_VPN_route
+=== RUN   TestNetworkRouteTakeoverScenarios/no_connected_routes
+=== RUN   TestNetworkRouteTakeoverScenarios/renamed_VPN_description
+=== RUN   TestNetworkRouteTakeoverScenarios/unknown_tunnel_type_is_not_VPN_evidence
+=== RUN   TestNetworkRouteTakeoverScenarios/physical_name_is_not_evidence
+=== RUN   TestNetworkRouteTakeoverScenarios/Hyper-V_host_uplink_is_allowed
+=== RUN   TestNetworkRouteTakeoverScenarios/unknown_virtual_uplink_is_allowed
+=== RUN   TestNetworkRouteTakeoverScenarios/split_defaults_beat_metric
+=== RUN   TestNetworkRouteTakeoverScenarios/one_split_half
+=== RUN   TestNetworkRouteTakeoverScenarios/fragmented_default_after_LAN_exclusions
+=== RUN   TestNetworkRouteTakeoverScenarios/IPv6_default
+=== RUN   TestNetworkRouteTakeoverScenarios/IPv6_backup
+=== RUN   TestNetworkRouteTakeoverScenarios/IPv6_split_default
+=== RUN   TestNetworkRouteTakeoverScenarios/VPN_private_route_is_not_global_takeover
+=== RUN   TestNetworkRouteTakeoverScenarios/link-local_device_network
+--- PASS: TestNetworkRouteTakeoverScenarios (0.02s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/installed_Radmin_backup (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/Radmin_preferred (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/equal_cost (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/interface_metric_included (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/disconnected_VPN (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/active_proxy (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/own_stale_backup (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/only_VPN_route (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/no_connected_routes (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/renamed_VPN_description (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/unknown_tunnel_type_is_not_VPN_evidence (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/physical_name_is_not_evidence (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/Hyper-V_host_uplink_is_allowed (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/unknown_virtual_uplink_is_allowed (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/split_defaults_beat_metric (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/one_split_half (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/fragmented_default_after_LAN_exclusions (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/IPv6_default (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/IPv6_backup (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/IPv6_split_default (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/VPN_private_route_is_not_global_takeover (0.00s)
+    --- PASS: TestNetworkRouteTakeoverScenarios/link-local_device_network (0.00s)
+=== RUN   TestSpecificVPNRoutesReserveTunAddressSpace
+--- PASS: TestSpecificVPNRoutesReserveTunAddressSpace (0.00s)
+=== RUN   TestIPv6TransitionRoutesDoNotBlockTUN
+=== RUN   TestIPv6TransitionRoutesDoNotBlockTUN/Teredo_Tunneling_Pseudo-Interface
+=== RUN   TestIPv6TransitionRoutesDoNotBlockTUN/Microsoft_6to4_Adapter
+=== RUN   TestIPv6TransitionRoutesDoNotBlockTUN/Microsoft_ISATAP_Adapter
+=== RUN   TestIPv6TransitionRoutesDoNotBlockTUN/renamed_VPN_Tunnel
+=== RUN   TestIPv6TransitionRoutesDoNotBlockTUN/Generic_Tunnel
+--- PASS: TestIPv6TransitionRoutesDoNotBlockTUN (0.01s)
+    --- PASS: TestIPv6TransitionRoutesDoNotBlockTUN/Teredo_Tunneling_Pseudo-Interface (0.00s)
+    --- PASS: TestIPv6TransitionRoutesDoNotBlockTUN/Microsoft_6to4_Adapter (0.00s)
+    --- PASS: TestIPv6TransitionRoutesDoNotBlockTUN/Microsoft_ISATAP_Adapter (0.00s)
+    --- PASS: TestIPv6TransitionRoutesDoNotBlockTUN/renamed_VPN_Tunnel (0.00s)
+    --- PASS: TestIPv6TransitionRoutesDoNotBlockTUN/Generic_Tunnel (0.00s)
+=== RUN   TestMoreSpecificRoutesCanFullyShadowVPN
+--- PASS: TestMoreSpecificRoutesCanFullyShadowVPN (0.00s)
+=== RUN   TestUnoccupiedPrefixSearchMatchesHostCoverage
+--- PASS: TestUnoccupiedPrefixSearchMatchesHostCoverage (0.14s)
+=== RUN   TestRouteCollectionPreservesOtherFamilyOnFailure
+--- PASS: TestRouteCollectionPreservesOtherFamilyOnFailure (0.00s)
+=== RUN   TestReadOnlyNetworkRouteSnapshot
+    network_routes_windows_test.go:40: set HYPOMUX_RUN_TUN_PREFLIGHT_TEST=1 for native read-only route inspection
+--- SKIP: TestReadOnlyNetworkRouteSnapshot (0.00s)
+=== RUN   TestNativeRoutePrefixDecoding
+--- PASS: TestNativeRoutePrefixDecoding (0.00s)
+=== RUN   TestAddressRouteInspectionIgnoresUnneededMetadata
+--- PASS: TestAddressRouteInspectionIgnoresUnneededMetadata (0.00s)
+=== RUN   TestConfigureBackgroundCommand
+--- PASS: TestConfigureBackgroundCommand (0.01s)
+=== RUN   TestListRunningProcessesReturnsSortedExecutableNames
+--- PASS: TestListRunningProcessesReturnsSortedExecutableNames (0.00s)
+=== RUN   TestListRunningProcessChoicesReturnsValidIcons
+--- PASS: TestListRunningProcessChoicesReturnsValidIcons (0.18s)
+=== RUN   TestGenericAndUnavailableProcessIconsUseFallback
+--- PASS: TestGenericAndUnavailableProcessIconsUseFallback (0.00s)
+=== RUN   TestCheckedQuickAddPreservesOrderAndRejectsConcurrentWrites
+--- PASS: TestCheckedQuickAddPreservesOrderAndRejectsConcurrentWrites (0.39s)
+=== RUN   TestRejectRoutingSaveAndBackup
+--- PASS: TestRejectRoutingSaveAndBackup (0.09s)
+=== RUN   TestRejectRoutingOldManifestRequiresRestart
+--- PASS: TestRejectRoutingOldManifestRequiresRestart (0.02s)
+=== RUN   TestRejectRoutingPriorityAndHotReload
+=== RUN   TestRejectRoutingPriorityAndHotReload/auto
+=== RUN   TestRejectRoutingPriorityAndHotReload/off
+=== RUN   TestRejectRoutingPriorityAndHotReload/system
+--- PASS: TestRejectRoutingPriorityAndHotReload (1.03s)
+    --- PASS: TestRejectRoutingPriorityAndHotReload/auto (0.49s)
+    --- PASS: TestRejectRoutingPriorityAndHotReload/off (0.27s)
+    --- PASS: TestRejectRoutingPriorityAndHotReload/system (0.27s)
+=== RUN   TestNormalizeRoutingRulesMatchesV220Semantics
+--- PASS: TestNormalizeRoutingRulesMatchesV220Semantics (0.00s)
+=== RUN   TestParseLegacyRoutingRuleExpandsEveryValueWithoutReordering
+--- PASS: TestParseLegacyRoutingRuleExpandsEveryValueWithoutReordering (0.00s)
+=== RUN   TestRoutingOutboundsRejectUnselectedAdapter
+--- PASS: TestRoutingOutboundsRejectUnselectedAdapter (0.00s)
+=== RUN   TestParseRoutingBackupV1AndLegacyList
+=== RUN   TestParseRoutingBackupV1AndLegacyList/v1
+=== RUN   TestParseRoutingBackupV1AndLegacyList/legacy
+--- PASS: TestParseRoutingBackupV1AndLegacyList (0.00s)
+    --- PASS: TestParseRoutingBackupV1AndLegacyList/v1 (0.00s)
+    --- PASS: TestParseRoutingBackupV1AndLegacyList/legacy (0.00s)
+=== RUN   TestRejectInvalidRulesWithoutPartialSave
+--- PASS: TestRejectInvalidRulesWithoutPartialSave (0.00s)
+=== RUN   TestPreviewRoutingBatchClassifiesNormalizedValues
+--- PASS: TestPreviewRoutingBatchClassifiesNormalizedValues (0.04s)
+=== RUN   TestPreviewRoutingBatchRejectsOversizedInput
+--- PASS: TestPreviewRoutingBatchRejectsOversizedInput (0.00s)
+=== RUN   TestRoutingPreferencesRoundTripAndDisabledOutbound
+--- PASS: TestRoutingPreferencesRoundTripAndDisabledOutbound (0.14s)
+=== RUN   TestRoutingPreferenceValidation
+--- PASS: TestRoutingPreferenceValidation (0.00s)
+=== RUN   TestSaveRoutingOrderPersistsWithEmptyListAndAppliesToNewRules
+--- PASS: TestSaveRoutingOrderPersistsWithEmptyListAndAppliesToNewRules (0.23s)
+=== RUN   TestRuleSetEntriesReadsDisabledCacheAndPaginates
+--- PASS: TestRuleSetEntriesReadsDisabledCacheAndPaginates (0.01s)
+=== RUN   TestRuleSetEntriesDistinguishesUnfetchedFromNoMatches
+--- PASS: TestRuleSetEntriesDistinguishesUnfetchedFromNoMatches (0.01s)
+=== RUN   TestParseSingBoxSourceSubscription
+--- PASS: TestParseSingBoxSourceSubscription (0.00s)
+=== RUN   TestParseClashProviderSubscription
+--- PASS: TestParseClashProviderSubscription (0.00s)
+=== RUN   TestCanonicalPayloadIsStableAcrossProviderReordering
+--- PASS: TestCanonicalPayloadIsStableAcrossProviderReordering (0.00s)
+=== RUN   TestPublishExternalRuleSetSourceSkipsUnchangedContent
+--- PASS: TestPublishExternalRuleSetSourceSkipsUnchangedContent (0.00s)
+=== RUN   TestFetchRuleSetRejectsPrivateAndCleartextTargets
+--- PASS: TestFetchRuleSetRejectsPrivateAndCleartextTargets (3.05s)
+=== RUN   TestFetchRuleSetFollowsConditionals
+--- PASS: TestFetchRuleSetFollowsConditionals (0.00s)
+=== RUN   TestRuleSetServiceUpdateNormalizesAndPublishes
+--- PASS: TestRuleSetServiceUpdateNormalizesAndPublishes (0.05s)
+=== RUN   TestRuleSetServiceSaveValidatesAndPersists
+--- PASS: TestRuleSetServiceSaveValidatesAndPersists (0.05s)
+=== RUN   TestGuardRuleSetDialAddress
+--- PASS: TestGuardRuleSetDialAddress (0.00s)
+=== RUN   TestFetchRuleSetTimesOutQuickly
+--- PASS: TestFetchRuleSetTimesOutQuickly (3.05s)
+=== RUN   TestRuleSetSourcePathStaysBesideWatchedFile
+--- PASS: TestRuleSetSourcePathStaysBesideWatchedFile (0.00s)
+=== RUN   TestParseSingBoxSourceSubscriptionRejectsUnsupportedConditions
+--- PASS: TestParseSingBoxSourceSubscriptionRejectsUnsupportedConditions (0.00s)
+=== RUN   TestParseSingBoxSourceSubscriptionToleratesEmptyIPCIDRArray
+--- PASS: TestParseSingBoxSourceSubscriptionToleratesEmptyIPCIDRArray (0.00s)
+=== RUN   TestRuleSetServiceListSerializesEmptyListAsArray
+--- PASS: TestRuleSetServiceListSerializesEmptyListAsArray (0.00s)
+=== RUN   TestRuleSetUpdateRechecksEditsAfterDownload
+=== RUN   TestRuleSetUpdateRechecksEditsAfterDownload/disable
+=== RUN   TestRuleSetUpdateRechecksEditsAfterDownload/delete
+=== RUN   TestRuleSetUpdateRechecksEditsAfterDownload/url
+=== RUN   TestRuleSetUpdateRechecksEditsAfterDownload/failed-delete
+--- PASS: TestRuleSetUpdateRechecksEditsAfterDownload (0.37s)
+    --- PASS: TestRuleSetUpdateRechecksEditsAfterDownload/disable (0.09s)
+    --- PASS: TestRuleSetUpdateRechecksEditsAfterDownload/delete (0.09s)
+    --- PASS: TestRuleSetUpdateRechecksEditsAfterDownload/url (0.09s)
+    --- PASS: TestRuleSetUpdateRechecksEditsAfterDownload/failed-delete (0.09s)
+=== RUN   TestRuleSetSavePreservesLatestIngestionStatus
+--- PASS: TestRuleSetSavePreservesLatestIngestionStatus (0.10s)
+=== RUN   TestRuleSetUpdateRestoresSourceAndWatchedFilesOnCommitFailure
+=== RUN   TestRuleSetUpdateRestoresSourceAndWatchedFilesOnCommitFailure/first-download
+=== RUN   TestRuleSetUpdateRestoresSourceAndWatchedFilesOnCommitFailure/existing-cache
+--- PASS: TestRuleSetUpdateRestoresSourceAndWatchedFilesOnCommitFailure (0.13s)
+    --- PASS: TestRuleSetUpdateRestoresSourceAndWatchedFilesOnCommitFailure/first-download (0.06s)
+    --- PASS: TestRuleSetUpdateRestoresSourceAndWatchedFilesOnCommitFailure/existing-cache (0.07s)
+=== RUN   TestRuleSetMissingCacheDisablesConditionalFetch
+--- PASS: TestRuleSetMissingCacheDisablesConditionalFetch (0.06s)
+=== RUN   TestSubscriptionsRejectInvalidRegexAndAcceptScalar
+--- PASS: TestSubscriptionsRejectInvalidRegexAndAcceptScalar (0.00s)
+=== RUN   TestExternalRuleSetsRoundTripThroughSettings
+--- PASS: TestExternalRuleSetsRoundTripThroughSettings (0.01s)
+=== RUN   TestExternalRuleSetsDefaultToEmptyAfterReload
+--- PASS: TestExternalRuleSetsDefaultToEmptyAfterReload (0.00s)
+=== RUN   TestValidateSettingsRejectsUnsafeExternalRuleSets
+=== RUN   TestValidateSettingsRejectsUnsafeExternalRuleSets/空标识
+=== RUN   TestValidateSettingsRejectsUnsafeExternalRuleSets/空名称
+=== RUN   TestValidateSettingsRejectsUnsafeExternalRuleSets/超范围优先级
+=== RUN   TestValidateSettingsRejectsUnsafeExternalRuleSets/明文地址
+=== RUN   TestValidateSettingsRejectsUnsafeExternalRuleSets/缺少协议
+=== RUN   TestValidateSettingsRejectsUnsafeExternalRuleSets/带凭据地址
+=== RUN   TestValidateSettingsRejectsUnsafeExternalRuleSets/未知出口
+--- PASS: TestValidateSettingsRejectsUnsafeExternalRuleSets (0.00s)
+    --- PASS: TestValidateSettingsRejectsUnsafeExternalRuleSets/空标识 (0.00s)
+    --- PASS: TestValidateSettingsRejectsUnsafeExternalRuleSets/空名称 (0.00s)
+    --- PASS: TestValidateSettingsRejectsUnsafeExternalRuleSets/超范围优先级 (0.00s)
+    --- PASS: TestValidateSettingsRejectsUnsafeExternalRuleSets/明文地址 (0.00s)
+    --- PASS: TestValidateSettingsRejectsUnsafeExternalRuleSets/缺少协议 (0.00s)
+    --- PASS: TestValidateSettingsRejectsUnsafeExternalRuleSets/带凭据地址 (0.00s)
+    --- PASS: TestValidateSettingsRejectsUnsafeExternalRuleSets/未知出口 (0.00s)
+=== RUN   TestValidateSettingsRejectsDuplicateAndOversizedRuleSetLists
+--- PASS: TestValidateSettingsRejectsDuplicateAndOversizedRuleSetLists (0.00s)
+=== RUN   TestValidateRuleSetOutboundsRejectsUnavailableAdapter
+--- PASS: TestValidateRuleSetOutboundsRejectsUnavailableAdapter (0.00s)
+=== RUN   TestCloneSettingsDeepCopiesRuleSets
+--- PASS: TestCloneSettingsDeepCopiesRuleSets (0.00s)
+=== RUN   TestTunConfigWithExternalRuleSetPassesBundledSingBoxCheck
+--- PASS: TestTunConfigWithExternalRuleSetPassesBundledSingBoxCheck (0.18s)
+=== RUN   TestTunConfigWithoutPublishedRuleSetFileStillPassesCheck
+--- PASS: TestTunConfigWithoutPublishedRuleSetFileStillPassesCheck (0.17s)
+=== RUN   TestExternalRulesKeepPinnedRoutingCorrectAcrossEdits
+--- PASS: TestExternalRulesKeepPinnedRoutingCorrectAcrossEdits (0.24s)
+=== RUN   TestExternalRejectUsesRejectAction
+--- PASS: TestExternalRejectUsesRejectAction (0.01s)
+=== RUN   TestSchedulingCommitRollsBackOnlyFailedPersistence
+=== RUN   TestSchedulingCommitRollsBackOnlyFailedPersistence/success
+=== RUN   TestSchedulingCommitRollsBackOnlyFailedPersistence/apply
+=== RUN   TestSchedulingCommitRollsBackOnlyFailedPersistence/persist
+=== RUN   TestSchedulingCommitRollsBackOnlyFailedPersistence/rollback
+--- PASS: TestSchedulingCommitRollsBackOnlyFailedPersistence (0.00s)
+    --- PASS: TestSchedulingCommitRollsBackOnlyFailedPersistence/success (0.00s)
+    --- PASS: TestSchedulingCommitRollsBackOnlyFailedPersistence/apply (0.00s)
+    --- PASS: TestSchedulingCommitRollsBackOnlyFailedPersistence/persist (0.00s)
+    --- PASS: TestSchedulingCommitRollsBackOnlyFailedPersistence/rollback (0.00s)
+=== RUN   TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules
+=== RUN   TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules/round-robin
+=== RUN   TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules/weighted
+=== RUN   TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules/adaptive-throughput
+=== RUN   TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules/latency-first
+--- PASS: TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules (0.56s)
+    --- PASS: TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules/round-robin (0.14s)
+    --- PASS: TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules/weighted (0.13s)
+    --- PASS: TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules/adaptive-throughput (0.14s)
+    --- PASS: TestDiagnosticSelectionPreservesModeStrategyWeightsAndRules/latency-first (0.15s)
+=== RUN   TestSchedulingAdaptersUsesCurrentOSBinding
+--- PASS: TestSchedulingAdaptersUsesCurrentOSBinding (0.00s)
+=== RUN   TestSchedulingStoppedPersistenceAndFailure
+--- PASS: TestSchedulingStoppedPersistenceAndFailure (0.05s)
+=== RUN   TestSettingsDirectoryUsesHiddenHomeDirectory
+--- PASS: TestSettingsDirectoryUsesHiddenHomeDirectory (0.00s)
+=== RUN   TestUpdateChannelPersistsAndDefaultsSafely
+--- PASS: TestUpdateChannelPersistsAndDefaultsSafely (0.02s)
+=== RUN   TestSettingsFieldUpdatePreservesConcurrentOwners
+--- PASS: TestSettingsFieldUpdatePreservesConcurrentOwners (0.01s)
+=== RUN   TestSettingsFieldUpdatesMergeUnderLock
+--- PASS: TestSettingsFieldUpdatesMergeUnderLock (0.00s)
+=== RUN   TestSettingsFieldUpdateRejectsInvalidOrForeignFieldsAtomically
+--- PASS: TestSettingsFieldUpdateRejectsInvalidOrForeignFieldsAtomically (0.00s)
+=== RUN   TestMigrateLegacySettingsPreservesSemantics
+--- PASS: TestMigrateLegacySettingsPreservesSemantics (0.00s)
+=== RUN   TestLegacyMigrationRollbackRestoresNewSettings
+--- PASS: TestLegacyMigrationRollbackRestoresNewSettings (0.01s)
+=== RUN   TestSettingsUpdateDefaultsMissingDNSEgressMode
+--- PASS: TestSettingsUpdateDefaultsMissingDNSEgressMode (0.00s)
+=== RUN   TestFreshInstallDefaultsExitOnClose
+--- PASS: TestFreshInstallDefaultsExitOnClose (0.00s)
+=== RUN   TestSystemProxyTakeoverPreferencePersists
+--- PASS: TestSystemProxyTakeoverPreferencePersists (0.00s)
+=== RUN   TestOlderSettingsDefaultToSystemProxyTakeover
+--- PASS: TestOlderSettingsDefaultToSystemProxyTakeover (0.01s)
+=== RUN   TestAutoStartEngineRequiresLaunchAtStartup
+--- PASS: TestAutoStartEngineRequiresLaunchAtStartup (0.00s)
+=== RUN   TestAutoStartEnginePreferencePersists
+--- PASS: TestAutoStartEnginePreferencePersists (0.01s)
+=== RUN   TestRoutingServicePersistsCanonicalRules
+--- PASS: TestRoutingServicePersistsCanonicalRules (0.15s)
+=== RUN   TestSettingsUpdateKeepsMemoryUnchangedWhenDiskCommitFails
+--- PASS: TestSettingsUpdateKeepsMemoryUnchangedWhenDiskCommitFails (0.00s)
+=== RUN   TestSettingsLoadFailureBlocksOverwrite
+--- PASS: TestSettingsLoadFailureBlocksOverwrite (0.00s)
+=== RUN   TestSetAutostartRollsBackSystemStateWhenDiskCommitFails
+--- PASS: TestSetAutostartRollsBackSystemStateWhenDiskCommitFails (0.00s)
+=== RUN   TestAutoConnectWiFiDefaultsOffAndPersists
+--- PASS: TestAutoConnectWiFiDefaultsOffAndPersists (0.01s)
+=== RUN   TestSingBoxRuleSetPlanPreservesOverlappingRulePriority
+--- PASS: TestSingBoxRuleSetPlanPreservesOverlappingRulePriority (0.01s)
+=== RUN   TestRefreshSingBoxRuleSetsAtomicallyPublishesSavedRules
+--- PASS: TestRefreshSingBoxRuleSetsAtomicallyPublishesSavedRules (0.01s)
+=== RUN   TestPublishRuleSetFilesRollsBackEveryReplacementOnFailure
+--- PASS: TestPublishRuleSetFilesRollsBackEveryReplacementOnFailure (0.00s)
+=== RUN   TestRefreshRuleSetsRestoresFilesWhenSettingsCommitFails
+--- PASS: TestRefreshRuleSetsRestoresFilesWhenSettingsCommitFails (0.02s)
+=== RUN   TestRoutingSaveRestoresSettingsAndRuleSetsAfterPartialPublish
+--- PASS: TestRoutingSaveRestoresSettingsAndRuleSetsAfterPartialPublish (0.06s)
+=== RUN   TestRuleSetRestartRequirementDetectsFirstOffPolicyDomainRule
+--- PASS: TestRuleSetRestartRequirementDetectsFirstOffPolicyDomainRule (0.01s)
+=== RUN   TestExternalRuleSetTagAndPathStayStableAcrossURLEdits
+--- PASS: TestExternalRuleSetTagAndPathStayStableAcrossURLEdits (0.00s)
+=== RUN   TestSingBoxRuleSetPlanReferencesPublishedExternalRuleSet
+--- PASS: TestSingBoxRuleSetPlanReferencesPublishedExternalRuleSet (0.01s)
+=== RUN   TestSingBoxRuleSetPlanNeverReferencesAnExternalRuleSetWithoutAPublishedFile
+--- PASS: TestSingBoxRuleSetPlanNeverReferencesAnExternalRuleSetWithoutAPublishedFile (0.01s)
+=== RUN   TestSingBoxRuleSetPlanSkipsDisabledExternalRuleSet
+--- PASS: TestSingBoxRuleSetPlanSkipsDisabledExternalRuleSet (0.01s)
+=== RUN   TestExternalRuleSetExcludesHigherPriorityManualRule
+--- PASS: TestExternalRuleSetExcludesHigherPriorityManualRule (0.02s)
+=== RUN   TestExternalRuleSetPriorityChangeStaysHot
+--- PASS: TestExternalRuleSetPriorityChangeStaysHot (0.02s)
+=== RUN   TestSingBoxRuleSetManifestRecordsDeclaredExternalSets
+--- PASS: TestSingBoxRuleSetManifestRecordsDeclaredExternalSets (0.01s)
+=== RUN   TestRefreshNeverReferencesAnExternalRuleSetTheRunningConfigOmitted
+--- PASS: TestRefreshNeverReferencesAnExternalRuleSetTheRunningConfigOmitted (0.01s)
+=== RUN   TestRuleSetRestartRequirementDetectsNewlyLiveExternalRuleSet
+--- PASS: TestRuleSetRestartRequirementDetectsNewlyLiveExternalRuleSet (0.01s)
+=== RUN   TestRuleSetRestartRequirementDetectsARemovedExternalRuleSet
+--- PASS: TestRuleSetRestartRequirementDetectsARemovedExternalRuleSet (0.01s)
+=== RUN   TestRuleSetRestartRequirementFallsBackOnOlderManifestOnlyWhenAListIsLive
+--- PASS: TestRuleSetRestartRequirementFallsBackOnOlderManifestOnlyWhenAListIsLive (0.02s)
+=== RUN   TestCleanupKeepsDisabledSubscriptionPayloads
+--- PASS: TestCleanupKeepsDisabledSubscriptionPayloads (0.03s)
+=== RUN   TestParseSingBoxMajorMinor
+--- PASS: TestParseSingBoxMajorMinor (0.00s)
+=== RUN   TestMigrationErrorIdentifiesAndPreservesLegacyFile
+--- PASS: TestMigrationErrorIdentifiesAndPreservesLegacyFile (0.01s)
+=== RUN   TestDuplicateAdapterSourcesAreActionable
+--- PASS: TestDuplicateAdapterSourcesAreActionable (0.00s)
+=== RUN   TestPreflightEnvironmentAllowsStartButInvalidSourcesStillBlock
+--- PASS: TestPreflightEnvironmentAllowsStartButInvalidSourcesStillBlock (0.00s)
+=== RUN   TestPartialNetworkInspectionPreservesCompletedEvidence
+--- PASS: TestPartialNetworkInspectionPreservesCompletedEvidence (0.00s)
+=== RUN   TestEmptyNetworkInspectionIsIncomplete
+--- PASS: TestEmptyNetworkInspectionIsIncomplete (0.00s)
+=== RUN   TestICMPFailurePreservesRealErrorAndUnavailableMeasurements
+--- PASS: TestICMPFailurePreservesRealErrorAndUnavailableMeasurements (0.00s)
+=== RUN   TestSteamCDNPreferenceDefaultsOffAndPersistsWithoutStartingCore
+--- PASS: TestSteamCDNPreferenceDefaultsOffAndPersistsWithoutStartingCore (0.01s)
+=== RUN   TestSteamCDNFailedPersistenceKeepsPreference
+--- PASS: TestSteamCDNFailedPersistenceKeepsPreference (0.00s)
+=== RUN   TestSupportLogKeepsThreeSessionsAndRedactsSecrets
+--- PASS: TestSupportLogKeepsThreeSessionsAndRedactsSecrets (0.11s)
+=== RUN   TestSupportLogEnforcesFiveMiBLimit
+--- PASS: TestSupportLogEnforcesFiveMiBLimit (0.03s)
+=== RUN   TestSupportLogAggregatesRepeatedEvents
+--- PASS: TestSupportLogAggregatesRepeatedEvents (0.02s)
+=== RUN   TestSupportLogWritesChineseAdapterAndErrorTextAsUTF8
+--- PASS: TestSupportLogWritesChineseAdapterAndErrorTextAsUTF8 (0.02s)
+=== RUN   TestProxySettingsLockExcludesSecondHolder
+--- PASS: TestProxySettingsLockExcludesSecondHolder (0.00s)
+=== RUN   TestProxySettingsLockFailsOpenWhenContended
+--- PASS: TestProxySettingsLockFailsOpenWhenContended (2.02s)
+=== RUN   TestProxyRestoreRetriesEveryInterruptedStage
+=== RUN   TestProxyRestoreRetriesEveryInterruptedStage/ProxyEnable
+=== RUN   TestProxyRestoreRetriesEveryInterruptedStage/ProxyServer
+=== RUN   TestProxyRestoreRetriesEveryInterruptedStage/ProxyOverride
+=== RUN   TestProxyRestoreRetriesEveryInterruptedStage/notify
+=== RUN   TestProxyRestoreRetriesEveryInterruptedStage/remove
+--- PASS: TestProxyRestoreRetriesEveryInterruptedStage (0.03s)
+    --- PASS: TestProxyRestoreRetriesEveryInterruptedStage/ProxyEnable (0.01s)
+    --- PASS: TestProxyRestoreRetriesEveryInterruptedStage/ProxyServer (0.01s)
+    --- PASS: TestProxyRestoreRetriesEveryInterruptedStage/ProxyOverride (0.00s)
+    --- PASS: TestProxyRestoreRetriesEveryInterruptedStage/notify (0.00s)
+    --- PASS: TestProxyRestoreRetriesEveryInterruptedStage/remove (0.00s)
+=== RUN   TestProxyRestoreJournalFailureDoesNotWriteRegistry
+--- PASS: TestProxyRestoreJournalFailureDoesNotWriteRegistry (0.00s)
+=== RUN   TestProxyRestorePreservesExternalEditsDuringRetry
+=== RUN   TestProxyRestorePreservesExternalEditsDuringRetry/ProxyServer
+=== RUN   TestProxyRestorePreservesExternalEditsDuringRetry/ProxyEnable
+=== RUN   TestProxyRestorePreservesExternalEditsDuringRetry/ProxyOverride
+--- PASS: TestProxyRestorePreservesExternalEditsDuringRetry (0.01s)
+    --- PASS: TestProxyRestorePreservesExternalEditsDuringRetry/ProxyServer (0.01s)
+    --- PASS: TestProxyRestorePreservesExternalEditsDuringRetry/ProxyEnable (0.00s)
+    --- PASS: TestProxyRestorePreservesExternalEditsDuringRetry/ProxyOverride (0.00s)
+=== RUN   TestProxyRestoreActiveMarkerHonorsUserChangesBackToOriginal
+=== RUN   TestProxyRestoreActiveMarkerHonorsUserChangesBackToOriginal/ProxyEnable
+=== RUN   TestProxyRestoreActiveMarkerHonorsUserChangesBackToOriginal/ProxyServer
+=== RUN   TestProxyRestoreActiveMarkerHonorsUserChangesBackToOriginal/ProxyOverride
+--- PASS: TestProxyRestoreActiveMarkerHonorsUserChangesBackToOriginal (0.01s)
+    --- PASS: TestProxyRestoreActiveMarkerHonorsUserChangesBackToOriginal/ProxyEnable (0.00s)
+    --- PASS: TestProxyRestoreActiveMarkerHonorsUserChangesBackToOriginal/ProxyServer (0.00s)
+    --- PASS: TestProxyRestoreActiveMarkerHonorsUserChangesBackToOriginal/ProxyOverride (0.00s)
+=== RUN   TestProxyRestoreLegacyAndPreparedMarkers
+=== RUN   TestProxyRestoreLegacyAndPreparedMarkers/active
+=== RUN   TestProxyRestoreLegacyAndPreparedMarkers/prepared
+=== RUN   TestProxyRestoreLegacyAndPreparedMarkers/legacy
+--- PASS: TestProxyRestoreLegacyAndPreparedMarkers (0.01s)
+    --- PASS: TestProxyRestoreLegacyAndPreparedMarkers/active (0.00s)
+    --- PASS: TestProxyRestoreLegacyAndPreparedMarkers/prepared (0.00s)
+    --- PASS: TestProxyRestoreLegacyAndPreparedMarkers/legacy (0.00s)
+=== RUN   TestProxyRestoreMissingOriginalValuesAndReadFailure
+--- PASS: TestProxyRestoreMissingOriginalValuesAndReadFailure (0.00s)
+=== RUN   TestSystemProxyBypassMatchesOnlyIntended172PrivateRange
+--- PASS: TestSystemProxyBypassMatchesOnlyIntended172PrivateRange (0.00s)
+=== RUN   TestHypoMuxProxyOwnershipPatternIsNarrow
+--- PASS: TestHypoMuxProxyOwnershipPatternIsNarrow (0.00s)
+=== RUN   TestWindowsSystemToolsDoNotDependOnPATH
+--- PASS: TestWindowsSystemToolsDoNotDependOnPATH (0.00s)
+=== RUN   TestSelectTunIPv4Address
+=== RUN   TestSelectTunIPv4Address/default
+=== RUN   TestSelectTunIPv4Address/Hyper-V_issue_75
+=== RUN   TestSelectTunIPv4Address/subnet_overlap_without_equal_host
+=== RUN   TestSelectTunIPv4Address/VPN_covers_172_space
+=== RUN   TestSelectTunIPv4Address/fallback_to_remaining_private_pool
+=== RUN   TestSelectTunIPv4Address/all_private_pools_occupied
+=== RUN   TestSelectTunIPv4Address/fragmented_default_with_small_LAN_gap
+--- PASS: TestSelectTunIPv4Address (0.00s)
+    --- PASS: TestSelectTunIPv4Address/default (0.00s)
+    --- PASS: TestSelectTunIPv4Address/Hyper-V_issue_75 (0.00s)
+    --- PASS: TestSelectTunIPv4Address/subnet_overlap_without_equal_host (0.00s)
+    --- PASS: TestSelectTunIPv4Address/VPN_covers_172_space (0.00s)
+    --- PASS: TestSelectTunIPv4Address/fallback_to_remaining_private_pool (0.00s)
+    --- PASS: TestSelectTunIPv4Address/all_private_pools_occupied (0.00s)
+    --- PASS: TestSelectTunIPv4Address/fragmented_default_with_small_LAN_gap (0.00s)
+=== RUN   TestSelectTunIPv6BeyondFixedCandidates
+--- PASS: TestSelectTunIPv6BeyondFixedCandidates (0.00s)
+=== RUN   TestSelectTunIPv6Address
+--- PASS: TestSelectTunIPv6Address (0.00s)
+=== RUN   TestTUNStacksAndPersistentCacheConfig
+--- PASS: TestTUNStacksAndPersistentCacheConfig (4.75s)
+=== RUN   TestBundledSingBoxRestoresFakeIPCheckpointAfterForcedTermination
+--- PASS: TestBundledSingBoxRestoresFakeIPCheckpointAfterForcedTermination (12.59s)
+=== RUN   TestGeneratedTunConfigPassesBundledSingBoxCheck
+--- PASS: TestGeneratedTunConfigPassesBundledSingBoxCheck (0.23s)
+=== RUN   TestGeneratedTunConfigWithHotRuleSetsPassesBundledAndFutureSingBoxCheck
+--- PASS: TestGeneratedTunConfigWithHotRuleSetsPassesBundledAndFutureSingBoxCheck (0.17s)
+=== RUN   TestTunRouteResolvesFakeIPBeforeUserCIDRRules
+--- PASS: TestTunRouteResolvesFakeIPBeforeUserCIDRRules (0.13s)
+=== RUN   TestExplicitAdapterIPRuleOverridesProxyCompatibilityFallback
+--- PASS: TestExplicitAdapterIPRuleOverridesProxyCompatibilityFallback (0.12s)
+=== RUN   TestGeneratedTunConfigProtectsLiteralDNSBootstrapAndOmitsIPv6WhenUnavailable
+--- PASS: TestGeneratedTunConfigProtectsLiteralDNSBootstrapAndOmitsIPv6WhenUnavailable (0.13s)
+=== RUN   TestIPv4FallbackConfigReusesClashAPIIdentity
+--- PASS: TestIPv4FallbackConfigReusesClashAPIIdentity (0.19s)
+=== RUN   TestGeneratedTunConfigOffPolicyUsesNativeDNSWithoutUnconditionalFakeIP
+--- PASS: TestGeneratedTunConfigOffPolicyUsesNativeDNSWithoutUnconditionalFakeIP (0.18s)
+=== RUN   TestDNSBootstrapRouteExclusionsNormalizeAllLiteralIPFamilies
+--- PASS: TestDNSBootstrapRouteExclusionsNormalizeAllLiteralIPFamilies (0.00s)
+=== RUN   TestGeneratedTunConfigSystemPolicyDoesNotInstallDNSHijack
+--- PASS: TestGeneratedTunConfigSystemPolicyDoesNotInstallDNSHijack (0.17s)
+=== RUN   TestAggregationAlternativesResolveAllDomainsAndTryBackupIP
+--- PASS: TestAggregationAlternativesResolveAllDomainsAndTryBackupIP (0.00s)
+=== RUN   TestAggregationAlternativesRejectFakeIPAndRefreshResolution
+--- PASS: TestAggregationAlternativesRejectFakeIPAndRefreshResolution (0.00s)
+=== RUN   TestConnectivityBootstrapFallsBackToSecondDomain
+--- PASS: TestConnectivityBootstrapFallsBackToSecondDomain (0.00s)
+=== RUN   TestProbeTUNConnectivityAcceptsRealHTTPResponse
+--- PASS: TestProbeTUNConnectivityAcceptsRealHTTPResponse (0.00s)
+=== RUN   TestProbeTUNConnectivityRejectsUnavailableEndpoints
+--- PASS: TestProbeTUNConnectivityRejectsUnavailableEndpoints (0.00s)
+=== RUN   TestProbeTUNConnectivityReportsEveryEndpointFailure
+--- PASS: TestProbeTUNConnectivityReportsEveryEndpointFailure (0.00s)
+=== RUN   TestProbeTUNConnectivityAllowsAnyHTTPAlternative
+--- PASS: TestProbeTUNConnectivityAllowsAnyHTTPAlternative (0.00s)
+=== RUN   TestChannelConnectivitySeparatesDNSBootstrapAndAggregation
+--- PASS: TestChannelConnectivitySeparatesDNSBootstrapAndAggregation (0.00s)
+=== RUN   TestChannelConnectivityAllowsAnyAggregationHTTPAlternative
+--- PASS: TestChannelConnectivityAllowsAnyAggregationHTTPAlternative (0.00s)
+=== RUN   TestChannelConnectivityRequiresDNSBootstrapEvenWhenHTTPWorks
+--- PASS: TestChannelConnectivityRequiresDNSBootstrapEvenWhenHTTPWorks (0.00s)
+=== RUN   TestChannelConnectivityReportsAllFailedAggregationEndpoints
+--- PASS: TestChannelConnectivityReportsAllFailedAggregationEndpoints (0.00s)
+=== RUN   TestChannelConnectivityRequiresRealTunDataPath
+--- PASS: TestChannelConnectivityRequiresRealTunDataPath (0.00s)
+=== RUN   TestAggregationConnectivityUsesSOCKSDataChannel
+--- PASS: TestAggregationConnectivityUsesSOCKSDataChannel (0.00s)
+=== RUN   TestResolveAggregationTargetUsesPreTUNDNSAddress
+--- PASS: TestResolveAggregationTargetUsesPreTUNDNSAddress (0.00s)
+=== RUN   TestResolveAggregationTargetSkipsUnrelatedPreTUNDNSResult
+--- PASS: TestResolveAggregationTargetSkipsUnrelatedPreTUNDNSResult (0.00s)
+=== RUN   TestAutomaticDNSEgressFollowsIPv4DefaultRule
+--- PASS: TestAutomaticDNSEgressFollowsIPv4DefaultRule (0.00s)
+=== RUN   TestAutomaticDNSEgressPrefersIPv4WhenDefaultsConflict
+--- PASS: TestAutomaticDNSEgressPrefersIPv4WhenDefaultsConflict (0.00s)
+=== RUN   TestAutomaticDNSEgressUsesSystemDefaultBeforeMetric
+--- PASS: TestAutomaticDNSEgressUsesSystemDefaultBeforeMetric (0.00s)
+=== RUN   TestAutomaticDNSEgressFallsBackToLowestMetric
+--- PASS: TestAutomaticDNSEgressFallsBackToLowestMetric (0.00s)
+=== RUN   TestExplicitDNSEgressRequiresEnabledAdapter
+--- PASS: TestExplicitDNSEgressRequiresEnabledAdapter (0.00s)
+=== RUN   TestSystemDNSEgressRequiresSelectedDefaultAdapter
+--- PASS: TestSystemDNSEgressRequiresSelectedDefaultAdapter (0.00s)
+=== RUN   TestLocalDiscoveryStaysOutsideTun
+--- PASS: TestLocalDiscoveryStaysOutsideTun (0.00s)
+=== RUN   TestNetworkObservationChangesAndIncompleteScans
+--- PASS: TestNetworkObservationChangesAndIncompleteScans (0.03s)
+=== RUN   TestTunPreflightBlocksBeforeNetworkTakeover
+--- PASS: TestTunPreflightBlocksBeforeNetworkTakeover (0.00s)
+=== RUN   TestTunPreflightCanBecomeReadyWithIndependentCore
+--- PASS: TestTunPreflightCanBecomeReadyWithIndependentCore (0.00s)
+=== RUN   TestTunPreflightIsReusedOnceForImmediateStartup
+--- PASS: TestTunPreflightIsReusedOnceForImmediateStartup (0.00s)
+=== RUN   TestTunPreflightReuseRejectsChangedOrExpiredNetwork
+--- PASS: TestTunPreflightReuseRejectsChangedOrExpiredNetwork (0.00s)
+=== RUN   TestTunPreflightTreatsSharedGatewayAsInformational
+--- PASS: TestTunPreflightTreatsSharedGatewayAsInformational (0.00s)
+=== RUN   TestTunPreflightElevatedHostIsInformationalWithoutConfirmation
+--- PASS: TestTunPreflightElevatedHostIsInformationalWithoutConfirmation (0.00s)
+=== RUN   TestTunPreflightElevatedCompatibilityDoesNotMuteOtherRisks
+--- PASS: TestTunPreflightElevatedCompatibilityDoesNotMuteOtherRisks (0.00s)
+=== RUN   TestTunPreflightElevatedHostStillRequiresCoreChannel
+--- PASS: TestTunPreflightElevatedHostStillRequiresCoreChannel (0.00s)
+=== RUN   TestTunPreflightReportsMissingResources
+--- PASS: TestTunPreflightReportsMissingResources (0.00s)
+=== RUN   TestTunPreflightReportsReadOnlyForeignNetworkRisks
+--- PASS: TestTunPreflightReportsReadOnlyForeignNetworkRisks (0.00s)
+=== RUN   TestTunPreflightAllowsCoreToRecoverOwnedStaleTun
+--- PASS: TestTunPreflightAllowsCoreToRecoverOwnedStaleTun (0.00s)
+=== RUN   TestRealWindowsTunPreflightIsReadOnly
+    tun_preflight_windows_integration_test.go:12: set HYPOMUX_RUN_TUN_PREFLIGHT_TEST=1 for the explicit read-only Windows TUN preflight
+--- SKIP: TestRealWindowsTunPreflightIsReadOnly (0.00s)
+=== RUN   TestTUNRoutingPriorityAndHotReload
+=== RUN   TestTUNRoutingPriorityAndHotReload/auto/plain
+=== RUN   TestTUNRoutingPriorityAndHotReload/auto/compatibility
+=== RUN   TestTUNRoutingPriorityAndHotReload/off/plain
+=== RUN   TestTUNRoutingPriorityAndHotReload/off/compatibility
+=== RUN   TestTUNRoutingPriorityAndHotReload/system/plain
+=== RUN   TestTUNRoutingPriorityAndHotReload/system/compatibility
+--- PASS: TestTUNRoutingPriorityAndHotReload (1.44s)
+    --- PASS: TestTUNRoutingPriorityAndHotReload/auto/plain (0.24s)
+    --- PASS: TestTUNRoutingPriorityAndHotReload/auto/compatibility (0.24s)
+    --- PASS: TestTUNRoutingPriorityAndHotReload/off/plain (0.23s)
+    --- PASS: TestTUNRoutingPriorityAndHotReload/off/compatibility (0.25s)
+    --- PASS: TestTUNRoutingPriorityAndHotReload/system/plain (0.24s)
+    --- PASS: TestTUNRoutingPriorityAndHotReload/system/compatibility (0.24s)
+=== RUN   TestCustomRoutingPriorityAndDisabledRulesHotReload
+--- PASS: TestCustomRoutingPriorityAndDisabledRulesHotReload (0.26s)
+=== RUN   TestAllTypeOrdersHotReload
+--- PASS: TestAllTypeOrdersHotReload (0.25s)
+=== RUN   TestBundledSingBoxRoutingAndHotReload
+=== RUN   TestBundledSingBoxRoutingAndHotReload/ip-domain-plain
+=== RUN   TestBundledSingBoxRoutingAndHotReload/ip-domain-compat
+=== RUN   TestBundledSingBoxRoutingAndHotReload/ip-literal-compat
+=== RUN   TestBundledSingBoxRoutingAndHotReload/subdomain-specific
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-0-compat-false
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-0-compat-true
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-1-compat-false
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-1-compat-true
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-2-compat-false
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-2-compat-true
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-3-compat-false
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-3-compat-true
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-4-compat-false
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-4-compat-true
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-5-compat-false
+=== RUN   TestBundledSingBoxRoutingAndHotReload/order-5-compat-true
+--- PASS: TestBundledSingBoxRoutingAndHotReload (6.10s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/ip-domain-plain (0.39s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/ip-domain-compat (0.38s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/ip-literal-compat (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/subdomain-specific (0.61s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-0-compat-false (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-0-compat-true (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-1-compat-false (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-1-compat-true (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-2-compat-false (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-2-compat-true (0.38s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-3-compat-false (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-3-compat-true (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-4-compat-false (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-4-compat-true (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-5-compat-false (0.36s)
+    --- PASS: TestBundledSingBoxRoutingAndHotReload/order-5-compat-true (0.36s)
+=== RUN   TestTUNStackSettingsRoundTrip
+--- PASS: TestTUNStackSettingsRoundTrip (0.01s)
+=== RUN   TestTUNStackLegacySettingsAndRollback
+--- PASS: TestTUNStackLegacySettingsAndRollback (0.01s)
+=== RUN   TestTUNDNSDiagnosticFailureDoesNotPreventConfiguration
+--- PASS: TestTUNDNSDiagnosticFailureDoesNotPreventConfiguration (0.00s)
+=== RUN   TestForcedTUNDNSPreservesEncryptedPolicyAndRejectsMissingConfiguration
+--- PASS: TestForcedTUNDNSPreservesEncryptedPolicyAndRejectsMissingConfiguration (0.00s)
+=== RUN   TestTUNDNSKeepsSuccessfullyProbedUpstream
+--- PASS: TestTUNDNSKeepsSuccessfullyProbedUpstream (0.00s)
+=== RUN   TestForcedPreflightDoesNotVetoEnvironmentAndInvalidatesCache
+--- PASS: TestForcedPreflightDoesNotVetoEnvironmentAndInvalidatesCache (0.00s)
+=== RUN   TestForcedAddressInspectionUsesKnownAllocationsWhenScanFails
+--- PASS: TestForcedAddressInspectionUsesKnownAllocationsWhenScanFails (0.00s)
+=== RUN   TestRepeatedConnectivityFailuresRemainAdvisoryAndRecover
+--- PASS: TestRepeatedConnectivityFailuresRemainAdvisoryAndRecover (0.00s)
+=== RUN   TestPreviewVersionComparison
+--- PASS: TestPreviewVersionComparison (0.00s)
+=== RUN   TestPreviewUpdateChannels
+=== RUN   TestPreviewUpdateChannels/stable_never_checks_preview
+=== RUN   TestPreviewUpdateChannels/stable_opts_into_preview
+=== RUN   TestPreviewUpdateChannels/preview_follows_RC
+=== RUN   TestPreviewUpdateChannels/preview_graduates
+=== RUN   TestPreviewUpdateChannels/stable_channel_rejects_preview
+=== RUN   TestPreviewUpdateChannels/preview_outage_falls_back_to_stable
+=== RUN   TestPreviewUpdateChannels/never_downgrade_preview
+=== RUN   TestPreviewUpdateChannels/switching_stable_does_not_downgrade
+=== RUN   TestPreviewUpdateChannels/switching_stable_accepts_final
+--- PASS: TestPreviewUpdateChannels (0.00s)
+    --- PASS: TestPreviewUpdateChannels/stable_never_checks_preview (0.00s)
+    --- PASS: TestPreviewUpdateChannels/stable_opts_into_preview (0.00s)
+    --- PASS: TestPreviewUpdateChannels/preview_follows_RC (0.00s)
+    --- PASS: TestPreviewUpdateChannels/preview_graduates (0.00s)
+    --- PASS: TestPreviewUpdateChannels/stable_channel_rejects_preview (0.00s)
+    --- PASS: TestPreviewUpdateChannels/preview_outage_falls_back_to_stable (0.00s)
+    --- PASS: TestPreviewUpdateChannels/never_downgrade_preview (0.00s)
+    --- PASS: TestPreviewUpdateChannels/switching_stable_does_not_downgrade (0.00s)
+    --- PASS: TestPreviewUpdateChannels/switching_stable_accepts_final (0.00s)
+=== RUN   TestUpdaterReadsSavedChannelOnEveryCheck
+--- PASS: TestUpdaterReadsSavedChannelOnEveryCheck (0.00s)
+=== RUN   TestPreviewManifestRetainsURLAndSignatureValidation
+--- PASS: TestPreviewManifestRetainsURLAndSignatureValidation (0.00s)
+=== RUN   TestInstallAndQuitUsesLifecycleCallbackAfterLauncherStarts
+--- PASS: TestInstallAndQuitUsesLifecycleCallbackAfterLauncherStarts (0.00s)
+=== RUN   TestInstallAndQuitDoesNotQuitWhenLauncherFails
+--- PASS: TestInstallAndQuitDoesNotQuitWhenLauncherFails (0.00s)
+=== RUN   TestInstallAndQuitRequiresLifecycleCallback
+--- PASS: TestInstallAndQuitRequiresLifecycleCallback (0.00s)
+=== RUN   TestUpdaterVersionComparison
+--- PASS: TestUpdaterVersionComparison (0.00s)
+=== RUN   TestUpdaterAcceptsOnlyExactOfficialInstallerURLs
+--- PASS: TestUpdaterAcceptsOnlyExactOfficialInstallerURLs (0.00s)
+=== RUN   TestUpdaterAcceptsOnlyExactSignedUpdateChannelURLs
+--- PASS: TestUpdaterAcceptsOnlyExactSignedUpdateChannelURLs (0.00s)
+=== RUN   TestManifestRequiresSchemaDigestAndExactInstallerMetadata
+=== RUN   TestManifestRequiresSchemaDigestAndExactInstallerMetadata/zero_size
+=== RUN   TestManifestRequiresSchemaDigestAndExactInstallerMetadata/no_mirrors
+=== RUN   TestManifestRequiresSchemaDigestAndExactInstallerMetadata/missing_schema
+=== RUN   TestManifestRequiresSchemaDigestAndExactInstallerMetadata/missing_digest
+=== RUN   TestManifestRequiresSchemaDigestAndExactInstallerMetadata/short_digest
+=== RUN   TestManifestRequiresSchemaDigestAndExactInstallerMetadata/wrong_name
+--- PASS: TestManifestRequiresSchemaDigestAndExactInstallerMetadata (0.00s)
+    --- PASS: TestManifestRequiresSchemaDigestAndExactInstallerMetadata/zero_size (0.00s)
+    --- PASS: TestManifestRequiresSchemaDigestAndExactInstallerMetadata/no_mirrors (0.00s)
+    --- PASS: TestManifestRequiresSchemaDigestAndExactInstallerMetadata/missing_schema (0.00s)
+    --- PASS: TestManifestRequiresSchemaDigestAndExactInstallerMetadata/missing_digest (0.00s)
+    --- PASS: TestManifestRequiresSchemaDigestAndExactInstallerMetadata/short_digest (0.00s)
+    --- PASS: TestManifestRequiresSchemaDigestAndExactInstallerMetadata/wrong_name (0.00s)
+=== RUN   TestUpdaterChoosesNewestMetadataSource
+=== RUN   TestUpdaterChoosesNewestMetadataSource/3.0.0
+=== RUN   TestUpdaterChoosesNewestMetadataSource/2.7.0
+=== RUN   TestUpdaterChoosesNewestMetadataSource/1.0.0
+--- PASS: TestUpdaterChoosesNewestMetadataSource (0.00s)
+    --- PASS: TestUpdaterChoosesNewestMetadataSource/3.0.0 (0.00s)
+    --- PASS: TestUpdaterChoosesNewestMetadataSource/2.7.0 (0.00s)
+    --- PASS: TestUpdaterChoosesNewestMetadataSource/1.0.0 (0.00s)
+=== RUN   TestUpdaterRejectsConflictingMetadataForSameVersion
+--- PASS: TestUpdaterRejectsConflictingMetadataForSameVersion (0.00s)
+=== RUN   TestUpdaterRejectsNonInstallerMetadataConflictForSameVersion
+--- PASS: TestUpdaterRejectsNonInstallerMetadataConflictForSameVersion (0.00s)
+=== RUN   TestUpdaterUsesCNBManifestWhenGitHubMetadataIsUnavailable
+--- PASS: TestUpdaterUsesCNBManifestWhenGitHubMetadataIsUnavailable (0.00s)
+=== RUN   TestUpdaterUsesGitHubManifestWhenCNBMetadataIsUnavailable
+--- PASS: TestUpdaterUsesGitHubManifestWhenCNBMetadataIsUnavailable (0.00s)
+=== RUN   TestUpdaterFailsClosedWhenSignedChannelsConflictForSameVersion
+--- PASS: TestUpdaterFailsClosedWhenSignedChannelsConflictForSameVersion (0.00s)
+=== RUN   TestUpdaterIgnoresTamperedChannelWhenOtherChannelIsTrusted
+--- PASS: TestUpdaterIgnoresTamperedChannelWhenOtherChannelIsTrusted (0.00s)
+=== RUN   TestUpdaterFailsWhenBothChannelSignaturesAreInvalid
+--- PASS: TestUpdaterFailsWhenBothChannelSignaturesAreInvalid (0.00s)
+=== RUN   TestUpdaterRejectsMissingTamperedOrWrongManifestSignature
+=== RUN   TestUpdaterRejectsMissingTamperedOrWrongManifestSignature/missing
+=== RUN   TestUpdaterRejectsMissingTamperedOrWrongManifestSignature/tampered_manifest
+=== RUN   TestUpdaterRejectsMissingTamperedOrWrongManifestSignature/wrong_signature
+--- PASS: TestUpdaterRejectsMissingTamperedOrWrongManifestSignature (0.00s)
+    --- PASS: TestUpdaterRejectsMissingTamperedOrWrongManifestSignature/missing (0.00s)
+    --- PASS: TestUpdaterRejectsMissingTamperedOrWrongManifestSignature/tampered_manifest (0.00s)
+    --- PASS: TestUpdaterRejectsMissingTamperedOrWrongManifestSignature/wrong_signature (0.00s)
+=== RUN   TestUpdaterDownloadFallsBackBetweenMirrorsInBothDirections
+=== RUN   TestUpdaterDownloadFallsBackBetweenMirrorsInBothDirections/CNB_to_GitHub
+=== RUN   TestUpdaterDownloadFallsBackBetweenMirrorsInBothDirections/GitHub_to_CNB
+--- PASS: TestUpdaterDownloadFallsBackBetweenMirrorsInBothDirections (0.00s)
+    --- PASS: TestUpdaterDownloadFallsBackBetweenMirrorsInBothDirections/CNB_to_GitHub (0.00s)
+    --- PASS: TestUpdaterDownloadFallsBackBetweenMirrorsInBothDirections/GitHub_to_CNB (0.00s)
+=== RUN   TestUpdaterDownloadFailsWhenAllMirrorsFail
+--- PASS: TestUpdaterDownloadFailsWhenAllMirrorsFail (0.00s)
+=== RUN   TestUpdaterDigestMismatchIsFailClosedAcrossMirrors
+--- PASS: TestUpdaterDigestMismatchIsFailClosedAcrossMirrors (0.00s)
+=== RUN   TestUpdaterRejectsMissingDigestBeforeNetwork
+--- PASS: TestUpdaterRejectsMissingDigestBeforeNetwork (0.00s)
+=== RUN   TestUpdaterRejectsSizeMismatchBeforeSignatureCheck
+--- PASS: TestUpdaterRejectsSizeMismatchBeforeSignatureCheck (0.00s)
+=== RUN   TestUpdaterRejectsUntrustedAuthenticodePublisher
+--- PASS: TestUpdaterRejectsUntrustedAuthenticodePublisher (0.00s)
+=== RUN   TestValidateDownloadedInstallerPathRequiresOwnedTempDirectory
+--- PASS: TestValidateDownloadedInstallerPathRequiresOwnedTempDirectory (0.00s)
+=== RUN   TestValidateDownloadedInstallerPathRejectsUnexpectedName
+--- PASS: TestValidateDownloadedInstallerPathRejectsUnexpectedName (0.00s)
+=== RUN   TestVerifyDownloadedInstallerAuthenticityRejectsUnsignedFile
+--- PASS: TestVerifyDownloadedInstallerAuthenticityRejectsUnsignedFile (0.01s)
+=== RUN   TestVerifyDownloadedInstallerAuthenticityAcceptsOfficialSignedInstaller
+    updater_windows_test.go:72: set HYPOMUX_SIGNED_INSTALLER_TEST to an official signed installer
+--- SKIP: TestVerifyDownloadedInstallerAuthenticityAcceptsOfficialSignedInstaller (0.00s)
+=== RUN   TestIsRevokedCertificateErrorOnlyAcceptsDefinitiveRevocation
+--- PASS: TestIsRevokedCertificateErrorOnlyAcceptsDefinitiveRevocation (0.00s)
+=== RUN   TestCheckInstallerRevocationFailsOpenWithoutRevocationEvidence
+--- PASS: TestCheckInstallerRevocationFailsOpenWithoutRevocationEvidence (0.00s)
+=== RUN   TestLaunchInstallerRejectsUnsignedFileBeforeCreatingHelper
+--- PASS: TestLaunchInstallerRejectsUnsignedFileBeforeCreatingHelper (0.00s)
+=== RUN   TestWFPCompatibilityFailureIsDeviceOwnedAndClearedByExplicitRetry
+--- PASS: TestWFPCompatibilityFailureIsDeviceOwnedAndClearedByExplicitRetry (0.01s)
+=== RUN   TestWFPCompatibilityFailureExpiresWhenEnvironmentChanges
+--- PASS: TestWFPCompatibilityFailureExpiresWhenEnvironmentChanges (0.00s)
+=== RUN   TestTunPreflightUsesRememberedWFPCompatibilityMode
+--- PASS: TestTunPreflightUsesRememberedWFPCompatibilityMode (0.00s)
+PASS
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop/internal/services	48.361s

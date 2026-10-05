@@ -25,9 +25,6 @@ func TestReleaseVersionOrderingAndWindowsMapping(t *testing.T) {
 			t.Fatalf("wrong order at %s", input)
 		}
 		previous = key
-		if (v.Channel() == "update-channel-preview") != v.Prerelease() {
-			t.Fatalf("channel: %s", input)
-		}
 	}
 	for input, want := range map[string]string{"2.7.0-beta.1": "2.7.0.1", "2.7.0-beta.29999": "2.7.0.29999", "2.7.0-rc.1": "2.7.0.30001", "2.7.0-rc.29999": "2.7.0.59999", "2.7.0": "2.7.0.65535"} {
 		v, _ := Parse(input)
@@ -50,7 +47,7 @@ func TestRejectMalformedReleaseVersions(t *testing.T) {
 
 func TestMetadataRoundTripInIsolatedCheckout(t *testing.T) {
 	root := t.TempDir()
-	for _, path := range []string{"VERSION", "Taskfile.yml", "build/config.yml", "frontend/package.json", "frontend/src/product.ts", "internal/services/updater.go", "build/windows/nsis/wails_tools.nsh", "build/windows/nsis/version.nsh", "build/windows/info.json", "build/windows/wails.exe.manifest", "build/windows/msix/template.xml", "build/windows/msix/app_manifest.xml"} {
+	for _, path := range []string{"VERSION", "Taskfile.yml", "build/config.yml", "frontend/package.json", "frontend/src/product.ts", "build/windows/nsis/wails_tools.nsh", "build/windows/nsis/version.nsh", "build/windows/info.json", "build/windows/wails.exe.manifest", "build/windows/msix/template.xml", "build/windows/msix/app_manifest.xml"} {
 		data, err := os.ReadFile(filepath.Join("../..", path))
 		if err != nil {
 			t.Fatal(err)

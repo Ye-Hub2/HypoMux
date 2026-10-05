@@ -25,7 +25,6 @@ type AppSettings struct {
 	SteamCDNEnabled     bool                  `json:"steam_cdn_enabled"`
 	Mode                string                `json:"mode"`
 	Language            string                `json:"language"`
-	UpdateChannel       string                `json:"update_channel,omitempty"`
 	SOCKSPort           int                   `json:"socks_port"`
 	HTTPPort            int                   `json:"http_port"`
 	SystemProxyTakeover bool                  `json:"system_proxy_takeover"`
@@ -62,7 +61,6 @@ func DefaultSettings() AppSettings {
 	return AppSettings{
 		Mode:                "tun",
 		Language:            "zh",
-		UpdateChannel:       "stable",
 		SOCKSPort:           10800,
 		HTTPPort:            10801,
 		SystemProxyTakeover: true,
@@ -70,7 +68,12 @@ func DefaultSettings() AppSettings {
 		TUNStack:            "system",
 		BlockedDomainExpiry: true,
 		CloseToTray:         false,
-		HideVirtualAdapters: true,
+		// Virtual adapters are shown by default. Hyper-V vNICs are the point of
+		// this application once the user brings their own: the whole "one MAC per
+		// link" story needs those adapters visible in the outbound pool picker.
+		// Hiding them by default buried the only path to that picker behind a
+		// toggle nobody would think to look for.
+		HideVirtualAdapters: false,
 		DNSServer:           "223.5.5.5",
 		DNSPolicy:           "auto",
 		DNSEgressMode:       DNSEgressAuto,
@@ -236,7 +239,7 @@ func (s *SettingsService) RollbackLegacyMigration() (AppSettings, error) {
 			restored.SystemProxyTakeover = DefaultSettings().SystemProxyTakeover
 		}
 		if _, exists := storedFields["hide_virtual_adapters"]; !exists {
-			restored.HideVirtualAdapters = true
+			restored.HideVirtualAdapters = DefaultSettings().HideVirtualAdapters
 		}
 		if restored.DNSEgressMode == "" {
 			restored.DNSEgressMode = DNSEgressAuto
@@ -270,8 +273,6 @@ func (s *SettingsService) UpdateFields(values AppSettings, fields []string) (App
 		switch field {
 		case "language":
 			next.Language = values.Language
-		case "update_channel":
-			next.UpdateChannel = values.UpdateChannel
 		case "socks_port":
 			next.SOCKSPort = values.SOCKSPort
 		case "http_port":
@@ -310,13 +311,6 @@ func (s *SettingsService) UpdateFields(values AppSettings, fields []string) (App
 }
 
 func (s *SettingsService) updateLocked(next AppSettings) (AppSettings, error) {
-	if next.UpdateChannel == "" {
-		next.UpdateChannel = s.settings.UpdateChannel
-		if next.UpdateChannel == "" {
-			next.UpdateChannel = "stable"
-		}
-	}
-
 	// Keep full-replace writes from older UI bindings backward-compatible.
 	if next.DNSEgressMode == "" {
 		next.DNSEgressMode = DNSEgressAuto
@@ -503,6 +497,10 @@ func (s *SettingsService) reload() error {
 	if _, exists := storedFields["system_proxy_takeover"]; !exists {
 		loaded.SystemProxyTakeover = defaults.SystemProxyTakeover
 	}
+	// Virtual adapters used to default to hidden. They now default to visible,
+	// so a settings file that predates the key gets the current default rather
+	// than the old one — but an explicitly persisted value always wins, because
+	// the user chose it.
 	if _, exists := storedFields["hide_virtual_adapters"]; !exists {
 		loaded.HideVirtualAdapters = defaults.HideVirtualAdapters
 	}
@@ -532,9 +530,6 @@ func (s *SettingsService) reload() error {
 	loaded.DNSAdapterID = strings.TrimSpace(loaded.DNSAdapterID)
 	if loaded.Language != "zh" && loaded.Language != "en" {
 		loaded.Language = defaults.Language
-	}
-	if loaded.UpdateChannel != "stable" && loaded.UpdateChannel != "preview" {
-		loaded.UpdateChannel = "stable"
 	}
 	if loaded.AdapterWeights == nil {
 		loaded.AdapterWeights = map[string]int{}
@@ -663,9 +658,6 @@ func (s *SettingsService) ClearWFPCompatibilityFailure() error {
 }
 
 func validateSettings(value AppSettings) error {
-	if value.UpdateChannel != "" && value.UpdateChannel != "stable" && value.UpdateChannel != "preview" {
-		return fmt.Errorf("不支持的更新渠道：%s", value.UpdateChannel)
-	}
 	if _, err := normalizeSchedulingStrategy(value.Strategy, value.Weighted); err != nil {
 		return err
 	}

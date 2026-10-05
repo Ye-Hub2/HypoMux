@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { PropsWithChildren, ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppNotificationProvider } from "../components/notifications/AppNotifications";
@@ -10,11 +10,24 @@ import { dismissStartupWarningsToday, startupWarningsDismissedToday } from "../s
 
 const mocks = vi.hoisted(() => ({
   useEngineState: vi.fn(),
+  settingsGet: vi.fn(),
+  settingsUpdate: vi.fn(),
 }));
 
 vi.mock("../state/useEngineState", () => ({
   useEngineState: mocks.useEngineState,
 }));
+
+vi.mock("../platform/services", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../platform/services")>();
+  return {
+    ...actual,
+    appServices: {
+      ...actual.appServices,
+      settings: { get: mocks.settingsGet, update: mocks.settingsUpdate },
+    },
+  };
+});
 
 vi.mock("../i18n/i18n", () => ({
   useI18n: () => ({
@@ -64,6 +77,7 @@ const engineState = () => ({
   systemProxyTakeover: true,
   adapters: [adapter],
   visibleAdapters: [adapter],
+  hideVirtualAdapters: false,
   hiddenAdapterCount: 0,
   hiddenSelectedCount: 0,
   selected: [adapter],
@@ -88,6 +102,7 @@ const engineState = () => ({
   updateWeight: vi.fn(),
   selectAll: vi.fn(),
   refreshAdapters: vi.fn(),
+  setHideVirtualAdapters: vi.fn(),
 });
 
 describe("HomePage adapter interactions", () => {
@@ -113,6 +128,8 @@ describe("HomePage adapter interactions", () => {
   beforeEach(() => {
     localStorage.clear();
     mocks.useEngineState.mockReturnValue(engineState());
+    mocks.settingsGet.mockResolvedValue({ hide_virtual_adapters: false });
+    mocks.settingsUpdate.mockImplementation(async (next: unknown) => next);
   });
 
   afterEach(() => {
@@ -202,6 +219,29 @@ describe("HomePage adapter interactions", () => {
     expect(screen.queryByRole("article")).toBeNull();
     expect((screen.getByRole("button", { name: "Select all" }) as HTMLButtonElement).disabled).toBe(true);
     expect(onAdapterRuntimeChange).toHaveBeenCalledWith([virtual]);
+  });
+
+  it("shows virtual adapters by default and persists hiding them from the list itself", async () => {
+    const state = engineState();
+    mocks.useEngineState.mockReturnValue(state);
+    renderPage(<HomePage />);
+    const toggle = screen.getByRole("switch", { name: "Hide virtual adapters" });
+    expect((toggle as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(toggle);
+    expect(state.setHideVirtualAdapters).toHaveBeenCalledWith(true);
+    await waitFor(() => expect(mocks.settingsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ hide_virtual_adapters: true }),
+      ["hide_virtual_adapters"],
+    ));
+  });
+
+  it("rolls the visibility filter back when the write fails", async () => {
+    const state = engineState();
+    mocks.useEngineState.mockReturnValue(state);
+    mocks.settingsUpdate.mockRejectedValue(new Error("offline"));
+    renderPage(<HomePage />);
+    fireEvent.click(screen.getByRole("switch", { name: "Hide virtual adapters" }));
+    await waitFor(() => expect(state.setHideVirtualAdapters).toHaveBeenCalledWith(false));
   });
 
   it("opens active connections for the clicked adapter", () => {

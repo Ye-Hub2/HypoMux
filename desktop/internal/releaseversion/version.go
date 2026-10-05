@@ -50,13 +50,6 @@ func (v Version) String() string {
 
 func (v Version) Prerelease() bool { return v.Stage != "" }
 
-func (v Version) Channel() string {
-	if v.Prerelease() {
-		return "update-channel-preview"
-	}
-	return "update-channel"
-}
-
 // Windows uses four 16-bit numeric components; stable sorts after beta and RC.
 func (v Version) Windows() string {
 	revision := 65535

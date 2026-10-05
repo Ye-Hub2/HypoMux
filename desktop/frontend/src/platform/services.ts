@@ -76,8 +76,27 @@ export type AdapterView = GeneratedAdapterView & { is_virtual?: boolean };
 export type HyperVAdapterStatus = GeneratedHyperVAdapterStatus;
 export type HyperVSwitch = GeneratedHyperVSwitch;
 
+/**
+ * One adapter's outcome inside a `RemoveAdapters` batch.
+ *
+ * Declared structurally rather than re-exported from the generated models so the
+ * page does not depend on a generation detail for a shape the contract freezes
+ * (`name` / `removed` / `reason` / `interface`). `interface` keeps the backend's
+ * json tag — it is the host-side alias (`vEthernet (xuni-01)`), not a TS keyword
+ * here — and `reason` is a runtime fact only the backend has: it is shown
+ * verbatim, never through `t()`.
+ *
+ * A non-empty `reason` is the authoritative "this one did not go away" signal,
+ * and it never escalates into a top-level error: the batch is reported per row.
+ */
+export type HyperVRemoveResult = {
+  name: string;
+  removed: boolean;
+  reason: string;
+  interface: string;
+};
+
 export type CompleteAppSettings = AppSettings & {
-  update_channel?: "stable" | "preview";
   strategy?: string;
   steam_cdn_enabled?: boolean;
   hide_virtual_adapters?: boolean;
@@ -127,30 +146,6 @@ export type BlockedDomainSnapshot = {
   enabled: boolean;
   use_expiry: boolean;
   entries: BlockedDomainEntry[];
-};
-
-export type ReleaseInfo = {
-  tag_name: string;
-  name: string;
-  notes: string;
-  page_url: string;
-  installer_urls: string[];
-  installer_name: string;
-  installer_size: number;
-  installer_digest: string;
-};
-
-export type UpdateCheckResult = {
-  current_version: string;
-  available: boolean;
-  release: ReleaseInfo;
-};
-
-export type UpdateProgress = {
-  state: "idle" | "starting" | "downloading" | "ready" | "installing" | "failed";
-  downloaded: number;
-  total: number;
-  message?: string;
 };
 
 export type WFPRepairResult = {
@@ -243,8 +238,6 @@ const settingsMethod = (method: string) =>
   `github.com/Hypostasis-Cat/HypoMux/desktop/internal/services.SettingsService.${method}`;
 const blockedDomainMethod = (method: string) =>
   `github.com/Hypostasis-Cat/HypoMux/desktop/internal/services.BlockedDomainService.${method}`;
-const updaterMethod = (method: string) =>
-  `github.com/Hypostasis-Cat/HypoMux/desktop/internal/services.UpdaterService.${method}`;
 const engineMethod = (method: string) =>
   `github.com/Hypostasis-Cat/HypoMux/desktop/internal/services.EngineService.${method}`;
 const appearanceMethod = (method: string) =>
@@ -281,6 +274,16 @@ export async function withServiceTimeout<T>(
 export const HYPERV_ADAPTER_READ_TIMEOUT_MS = 10_000;
 export const HYPERV_ADAPTER_WRITE_TIMEOUT_MS = 60_000;
 export const HYPERV_ADAPTER_CREATE_TIMEOUT_MS = 180_000;
+// Batch removal runs ONE elevated script for the whole selection, so a single UAC
+// prompt covers N adapters — but the run can legitimately take as long as a batch
+// create does (Hyper-V module load + N Remove-VMNetworkAdapter round-trips).
+// The value is the one this task froze: it matches the ~180s whole-batch ceiling
+// on the Go side, and the ceiling a frontend budget must never fall *below* — a
+// budget that expires first produces the worst possible outcome, the frontend
+// reports failure and invites a retry for adapters the host already deleted. If
+// the backend ceiling is ever raised past this, raise it here too (see
+// reports/vnic/83-frontend-batch-delete.md §未验证).
+export const HYPERV_ADAPTER_BATCH_TIMEOUT_MS = 180_000;
 
 // Pages never import generated Wails bindings directly. This facade keeps the
 // desktop transport replaceable and gives browser-only visual QA an explicit,
@@ -369,6 +372,11 @@ export const appServices = {
     switches: () => HyperVAdapterService.Switches(),
     create: (switchName: string, count: number) => HyperVAdapterService.Create(switchName, count),
     remove: (name: string) => HyperVAdapterService.Remove(name),
+    // One elevated run for the whole selection: N adapters, one UAC prompt. The
+    // timeout is the call site's job — see HYPERV_ADAPTER_BATCH_TIMEOUT_MS for
+    // why it cannot be the single-card 60s budget.
+    removeAdapters: (names: string[]) =>
+      HyperVAdapterService.RemoveAdapters(names) as Promise<HyperVRemoveResult[] | null>,
   },
   settings: {
     get: async () => (await SettingsService.Get()) as CompleteAppSettings,
@@ -395,14 +403,6 @@ export const appServices = {
     remove: (adapter: string, domain: string) =>
       Call.ByName(blockedDomainMethod("Remove"), adapter, domain) as Promise<void>,
     clear: () => Call.ByName(blockedDomainMethod("Clear")) as Promise<void>,
-  },
-  updater: {
-    check: () => Call.ByName(updaterMethod("Check")) as Promise<UpdateCheckResult>,
-    download: (release: ReleaseInfo) =>
-      Call.ByName(updaterMethod("Download"), release) as Promise<string>,
-    installAndQuit: (path: string) =>
-      Call.ByName(updaterMethod("InstallAndQuit"), path) as Promise<void>,
-    progress: () => Call.ByName(updaterMethod("Progress")) as Promise<UpdateProgress>,
   },
   ruleSets: {
     entries: (id: string, query: string, offset: number, limit: number) =>

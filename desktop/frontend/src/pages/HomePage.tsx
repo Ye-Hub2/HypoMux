@@ -10,6 +10,7 @@ import {
   DialogSurface,
   DialogTitle,
   Spinner,
+  Switch,
   Tooltip,
 } from "@fluentui/react-components";
 import {
@@ -25,6 +26,7 @@ import { NetworkAdapterItem } from "../components/home/NetworkAdapterItem";
 import { RuntimeStatusBar } from "../components/home/RuntimeStatusBar";
 import type { AppPage } from "../components/shell/CompactNavigation";
 import type { TunPreflightSnapshot } from "../platform/services";
+import { appServices } from "../platform/services";
 import { useI18n } from "../i18n/i18n";
 import { useAppNotifications } from "../components/notifications/AppNotifications";
 import { canDismissStartupWarnings, dismissStartupWarningsToday, startupWarningsDismissedToday } from "../state/startupWarningReminder";
@@ -131,6 +133,27 @@ export function HomePage({
   const feedback = engine.adapterFeedback;
   const applyingAdapters = feedback?.status === "pending";
 
+  // Visibility lives here because this is the list it filters. The toggle is
+  // applied optimistically so the list reacts immediately, then persisted; a
+  // failed write rolls the list back rather than leaving the two out of sync.
+  const [savingVisibility, setSavingVisibility] = useState(false);
+  const toggleVirtualAdapterVisibility = useCallback(async (checked: boolean) => {
+    if (savingVisibility) return;
+    const previous = engine.hideVirtualAdapters;
+    if (previous === checked) return;
+    engine.setHideVirtualAdapters(checked);
+    setSavingVisibility(true);
+    try {
+      const current = await appServices.settings.get();
+      await appServices.settings.update({ ...current, hide_virtual_adapters: checked }, ["hide_virtual_adapters"]);
+    } catch (error) {
+      engine.setHideVirtualAdapters(previous);
+      notifyError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingVisibility(false);
+    }
+  }, [engine, notifyError, savingVisibility]);
+
   return (
     <main className="home-page">
       <EngineHero
@@ -161,8 +184,8 @@ export function HomePage({
               <h1 id="network-section-title">{text("网络适配器", "Network adapters")}</h1>
               {engine.hiddenAdapterCount > 0 && (
                 <Tooltip content={text(
-                  `已隐藏 ${engine.hiddenAdapterCount} 张虚拟网卡${engine.hiddenSelectedCount ? `，其中 ${engine.hiddenSelectedCount} 张已选中` : ""}。可在设置中关闭“首页隐藏虚拟网卡”以显示。`,
-                  `${engine.hiddenAdapterCount} virtual adapter(s) hidden${engine.hiddenSelectedCount ? `, including ${engine.hiddenSelectedCount} selected` : ""}. Turn off “Hide virtual adapters on Home” in Settings to show them.`,
+                  `已隐藏 ${engine.hiddenAdapterCount} 张虚拟网卡${engine.hiddenSelectedCount ? `，其中 ${engine.hiddenSelectedCount} 张已选中` : ""}。关闭上方“隐藏虚拟网卡”即可显示。`,
+                  `${engine.hiddenAdapterCount} virtual adapter(s) hidden${engine.hiddenSelectedCount ? `, including ${engine.hiddenSelectedCount} selected` : ""}. Turn off “Hide virtual adapters” above to show them.`,
                 )} relationship="description">
                   <button type="button" className="network-hidden-hint">
                     {text(`已隐藏 ${engine.hiddenAdapterCount} 张虚拟网卡`, `${engine.hiddenAdapterCount} virtual hidden`)}
@@ -173,6 +196,17 @@ export function HomePage({
             </div>
           </div>
           <div className="network-section-actions">
+            <Switch
+              className="network-virtual-toggle"
+              checked={engine.hideVirtualAdapters}
+              disabled={savingVisibility}
+              label={text("隐藏虚拟网卡", "Hide virtual adapters")}
+              title={text(
+                "隐藏 VMware、Hyper-V 等虚拟网卡，只显示真实网卡。已有选择不受影响。",
+                "Hide virtual adapters such as VMware and Hyper-V, leaving physical adapters only. Existing selections are unaffected.",
+              )}
+              onChange={(_event, data) => void toggleVirtualAdapterVisibility(Boolean(data.checked))}
+            />
             <span>{engine.visibleAdapters.filter((adapter) => adapter.selected).length} / {engine.visibleAdapters.length} {text("已启用", "enabled")}</span>
             <Button
               size="small"
@@ -211,7 +245,7 @@ export function HomePage({
               <strong>{engine.hiddenAdapterCount > 0
                 ? text("当前活动网卡均已隐藏", "All active adapters are hidden")
                 : text("未发现可参与聚合的活动网卡", "No active adapters can participate in aggregation")}</strong>
-              <span>{engine.hiddenAdapterCount > 0 ? text("请在设置中关闭“首页隐藏虚拟网卡”以查看和选择。", "Turn off “Hide virtual adapters on Home” in Settings to view and select adapters.") : text(
+              <span>{engine.hiddenAdapterCount > 0 ? text("关闭上方“隐藏虚拟网卡”即可查看和选择。", "Turn off “Hide virtual adapters” above to view and select adapters.") : text(
                 "请检查网卡是否已连接并具有可用 IPv4 地址，然后重新扫描。",
                 "Check that an adapter is connected and has a usable IPv4 address, then scan again.",
               )}</span>

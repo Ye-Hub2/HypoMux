@@ -1,0 +1,10 @@
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop	0.309s
+?   	github.com/Hypostasis-Cat/HypoMux/desktop/build/windows/syso	[no test files]
+?   	github.com/Hypostasis-Cat/HypoMux/desktop/cmd/release-version	[no test files]
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop/cmd/update-manifest-sign	0.313s
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop/internal/engineclient	3.594s
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop/internal/platform	0.289s
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop/internal/platform/wails	0.601s
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop/internal/releaseversion	0.372s
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop/internal/services	46.398s
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop/internal/startup	0.253s

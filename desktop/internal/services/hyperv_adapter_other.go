@@ -22,3 +22,9 @@ func hypervExecuteElevated(ctx context.Context, payload []byte, timeout time.Dur
 func hypervExecuteUnelevated(ctx context.Context, payload []byte, timeout time.Duration) error {
 	return errHypervUnsupported
 }
+
+// hypervInventorySnapshot 是读取路径的平台降级：没有 Hyper-V 就没有 switches 可读，
+// 直接报同一个不可用错误，前端据此把整个 vNIC 面板标成不可用。
+func hypervInventorySnapshot(ctx context.Context, timeout time.Duration) (*hypervScriptResult, error) {
+	return nil, errHypervUnsupported
+}

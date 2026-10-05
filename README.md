@@ -23,7 +23,7 @@ HypoMux 聚合的是多个独立连接，而不是把单条 TCP 连接拆成多�
 
 - **聚合热点与网络诊断**：新增实验性 Windows 聚合热点、Wi-Fi 二维码、设备详情和 MTU 检测／恢复。
 - **调度与分流**：新增自适应速度、低延迟优先、拒绝连接规则和 Clash／sing-box 规则集订阅。
-- **稳定性与更新**：完善 Steam 优选、TUN 启动和 FakeIP 缓存，升级 sing-box 至 1.14.2，支持正式版／预览版更新渠道。
+- **稳定性与更新**：完善 Steam 优选、TUN 启动和 FakeIP 缓存，升级 sing-box 至 1.14.2。
 
 完整内容见 [v2.7.0 更新日志](.github/release-notes/v2.7.0.md)。开发者发布正式版、Beta 或 RC 的操作见 [版本发布说明](docs/RELEASE_VERSIONING.md)。
 
@@ -36,7 +36,7 @@ HypoMux 聚合的是多个独立连接，而不是把单条 TCP 连接拆成多�
 - **完整分流规则**：支持按进程、域名及子域名、目标 IP/CIDR 选择聚合、直连或指定网卡；旧配置中的多值规则会逐项迁移并保留。
 - **第三方代理兼容**：识别常见本地代理与游戏加速器进程，并按进程路径或监听端口 PID 建立直连旁路，降低回环与相互代理风险。
 - **可靠恢复**：系统代理状态采用原子化快照与恢复；异常退出、启动失败或重启后会继续尝试恢复原有设置。
-- **新版个性化与诊断**：提供 Fluent UI 界面、明暗主题、Mica/材质、自定义背景、网卡体检、连接查看、日志与更新检查。
+- **新版个性化与诊断**：提供 Fluent UI 界面、明暗主题、Mica/材质、自定义背景、网卡体检、连接查看与日志。
 
 ## 赞助方
 
@@ -49,7 +49,7 @@ HypoMux 聚合的是多个独立连接，而不是把单条 TCP 连接拆成多�
 
 HypoMux 衷心感谢 SignPath 与 SignPath Foundation 对开源软件的支持，帮助我们为 Windows 用户提供更安全、可信的下载体验。
 
-HypoMux 的官方 Windows 发布版本均由此仓库的 GitHub Actions 构建，并提交至 SignPath 进行代码签名。[GitHub Releases](https://github.com/Hypostasis-Cat/HypoMux/releases/latest)是权威公开发布页，[腾讯 CNB Release](https://cnb.cool/Hypostasis-Cat/HypoMux/-/releases/latest)是面向中国大陆的官方镜像；两处只分发同一份 SignPath 签名安装包。自动更新元数据通过独立的 signed update channel 分发并使用 Ed25519 验证，客户端随后校验安装包大小、SHA-256 与 Windows Authenticode 签名。下载安装后请确认发布者显示为 **SignPath Foundation**。
+HypoMux 的官方 Windows 发布版本均由此仓库的 GitHub Actions 构建，并提交至 SignPath 进行代码签名。[GitHub Releases](https://github.com/Hypostasis-Cat/HypoMux/releases/latest)是权威公开发布页，[腾讯 CNB Release](https://cnb.cool/Hypostasis-Cat/HypoMux/-/releases/latest)是面向中国大陆的官方镜像；两处只分发同一份 SignPath 签名安装包。本 fork 不包含应用内自动更新，升级需由用户自行前往上述发布页获取新版本。下载安装后请确认发布者显示为 **SignPath Foundation**。
 
 ### 团队角色
 
@@ -58,7 +58,7 @@ HypoMux 的官方 Windows 发布版本均由此仓库的 GitHub Actions 构建�
 
 ### 隐私政策
 
-HypoMux 不出售个人数据，也不默认上传遥测。程序会在用户或软件操作者请求相应功能时与其他网络系统通信：转发用户选择的网络流量、从官方 signed update channel 检查更新、从 GitHub 或 CNB Release 下载安装包，以及进行网络连通性验证。诊断默认脱敏，但应用名称、网卡标识、规则匹配值和用户手动输入仍可能包含个人信息。
+HypoMux 不出售个人数据，也不默认上传遥测。程序会在用户或软件操作者请求相应功能时与其他网络系统通信：转发用户选择的网络流量，以及进行网络连通性验证。诊断默认脱敏，但应用名称、网卡标识、规则匹配值和用户手动输入仍可能包含个人信息。
 
 ---
 
@@ -211,7 +211,7 @@ wails3 task windows:package
 ```
 
 完整发布流程以 [`.github/workflows/build.yml`](.github/workflows/build.yml) 为准。
-正式发布前可手动运行 `Release Trust Smoke Test` 工作流，只读核对更新清单密钥、GitHub/CNB Tag、CNB Release 访问权限及已有 signed update channel；该检查不会创建 Release、上传资产或修改更新通道。
+正式发布前可手动运行 `Release Trust Smoke Test` 工作流，只读核对 GitHub/CNB Tag 是否指向同一提交以及 CNB Release 访问权限；该检查不会创建 Release、上传资产或修改任何发布内容。
 
 ##  特别鸣谢 / Acknowledgments
 

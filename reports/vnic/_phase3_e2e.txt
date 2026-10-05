@@ -1,0 +1,87 @@
+=== RUN   TestZZTempRealMachineE2E
+    zz_temp_e2e_vnic_test.go:167: [env] HYPOMUX_DATA_DIR=%LOCALAPPDATA%\Temp\hypomux-e2e-79-run2-20261004-131046
+    zz_temp_e2e_vnic_test.go:168: [env] 台账路径=%LOCALAPPDATA%\Temp\hypomux-e2e-79-run2-20261004-131046\hyperv\adapters.json
+    zz_temp_e2e_vnic_test.go:169: [env] 开始时刻=2026-10-04 13:10:48.568
+    zz_temp_e2e_vnic_test.go:196: [pre-create] 台账 NextSeq=1 NextMAC=0 条目数=0
+    zz_temp_e2e_vnic_test.go:197: [pre-create] 出口池 SelectedAdapterIDs=[]string(nil)
+    zz_temp_e2e_vnic_test.go:197: [pre-create] 权重表 [] -> map[]
+    zz_temp_e2e_vnic_test.go:197: [pre-create] Mode="tun" Strategy=""
+    zz_temp_e2e_vnic_test.go:200: [list pre-create] List() 耗时=3.379s err=<nil> 行数=8
+    zz_temp_e2e_vnic_test.go:200: [list pre-create]   Name="HypoMux-vnic-01"  IF="vEthernet (HypoMux-vnic-01)"  State="ready"   Managed=false InPool=false MAC="02:1a:2b:00:00:00" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:200: [list pre-create]   Name="HypoMux-vnic-02"  IF="vEthernet (HypoMux-vnic-02)"  State="ready"   Managed=false InPool=false MAC="02:1a:2b:00:00:01" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:200: [list pre-create]   Name="Container NIC 9d844023" IF="vEthernet (Default Switch)"   State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="Default Switch" IP="172.25.160.<masked>"
+    zz_temp_e2e_vnic_test.go:200: [list pre-create]   Name="xuni-01"          IF="vEthernet (xuni-01)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:200: [list pre-create]   Name="xuni-02"          IF="vEthernet (xuni-02)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:200: [list pre-create]   Name="xuni-03"          IF="vEthernet (xuni-03)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:200: [list pre-create]   Name="xuni-04"          IF="vEthernet (xuni-04)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:200: [list pre-create]   Name="xuni-05"          IF="vEthernet (xuni-05)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:200: [list pre-create] Managed=false 的只读行 = 8 行 [HypoMux-vnic-01 HypoMux-vnic-02 Container NIC 9d844023 xuni-01 xuni-02 xuni-03 xuni-04 xuni-05]
+    zz_temp_e2e_vnic_test.go:201: [fixture] 宿主 021A2B* 最高序号 = 1 ⇒ 台账 nextMAC 夹具 = 2
+    zz_temp_e2e_vnic_test.go:201: [fixture] 台账 nextMAC 已置为 2
+    zz_temp_e2e_vnic_test.go:202: [post-fixture] 台账 NextSeq=1 NextMAC=2 条目数=0
+    zz_temp_e2e_vnic_test.go:205: ---------------- CREATE 开始 ----------------
+    zz_temp_e2e_vnic_test.go:209: [create] Create 返回耗时 = 2.292s
+    zz_temp_e2e_vnic_test.go:210: [create] err 的接口值 = <nil>
+    zz_temp_e2e_vnic_test.go:211: [create] err == nil ? true   <<< typed-nil 装箱判据
+    zz_temp_e2e_vnic_test.go:215: [create] 返回行数 = 1
+    zz_temp_e2e_vnic_test.go:217: [create] row: Name="HypoMux-vnic-03"
+    zz_temp_e2e_vnic_test.go:218: [create]      InterfaceName="vEthernet (HypoMux-vnic-03)"  <<< 期望 vEthernet (对象名)
+    zz_temp_e2e_vnic_test.go:219: [create]      MacAddress="02:1a:2b:00:00:02" SwitchName="XuniUplink"
+    zz_temp_e2e_vnic_test.go:220: [create]      AdapterID="{<GUID>}"
+    zz_temp_e2e_vnic_test.go:221: [create]      State="creating" Managed=true InPool=false
+    zz_temp_e2e_vnic_test.go:222: [create]      BatchID="70e238558d9b635d" CreatedAt="2026-10-04T13:10:53+08:00" LastError="已加入出口池，重启 HypoMux 聚合后生效"
+    zz_temp_e2e_vnic_test.go:229: [create] 本次创建对象名="HypoMux-vnic-03"，宿主别名="vEthernet (HypoMux-vnic-03)"
+    zz_temp_e2e_vnic_test.go:230: [create] 池键归一检查: hypervPoolKey("HypoMux-vnic-03") = "vEthernet (HypoMux-vnic-03)"
+    zz_temp_e2e_vnic_test.go:231: [create] 池键归一检查: hypervPoolKey("vEthernet (HypoMux-vnic-03)") = "vEthernet (HypoMux-vnic-03)"
+    zz_temp_e2e_vnic_test.go:232: [create] 两侧一致 ? true   <<< creating 永不收敛的根因判据
+    zz_temp_e2e_vnic_test.go:236: ---------------- 台账状态机观测开始 ----------------
+    zz_temp_e2e_vnic_test.go:252: [state] t=0s       "" -> "creating" (addr/mac 未变部分: mac="02:1a:2b:00:00:02" lastError="")
+    zz_temp_e2e_vnic_test.go:252: [state] t=910ms    "creating" -> "ready" (addr/mac 未变部分: mac="02:1a:2b:00:00:02" lastError="")
+    zz_temp_e2e_vnic_test.go:268: [pool] t=910ms 出口池已含 "vEthernet (HypoMux-vnic-03)"，权重=1，SelectedAdapterIDs=[]string{"vEthernet (HypoMux-vnic-03)"}
+    zz_temp_e2e_vnic_test.go:281: [state] 观测结束，总耗时 910ms
+    zz_temp_e2e_vnic_test.go:282: [state] 完整状态迁移序列：[t=0s  -> creating t=910ms creating -> ready]
+    zz_temp_e2e_vnic_test.go:283: [state] creating -> ready 用时 = 910ms  <<< 关键耗时数字
+    zz_temp_e2e_vnic_test.go:290: [post-ready] 台账 NextSeq=4 NextMAC=3 条目数=1
+    zz_temp_e2e_vnic_test.go:290: [post-ready]   entry Name="HypoMux-vnic-03" State="ready" MAC="02:1a:2b:00:00:02" Switch="XuniUplink" AdapterID="{<GUID>}" LastError=""
+    zz_temp_e2e_vnic_test.go:291: [post-ready] 出口池 SelectedAdapterIDs=[]string{"vEthernet (HypoMux-vnic-03)"}
+    zz_temp_e2e_vnic_test.go:291: [post-ready] 权重表 [vEthernet (HypoMux-vnic-03)] -> map[vEthernet (HypoMux-vnic-03):1]
+    zz_temp_e2e_vnic_test.go:291: [post-ready] Mode="tun" Strategy="round-robin"
+    zz_temp_e2e_vnic_test.go:292: [host vEthernet (HypoMux-vnic-03)] NETADAPTER status=Up mac=02-1A-2B-00-00-02 ifIndex=59 linkSpeed=100 Mbps
+    zz_temp_e2e_vnic_test.go:292: [host vEthernet (HypoMux-vnic-03)] IP af=IPv6 addr=<LINKLOCAL_IPv6>%59/64 PrefixOrigin=WellKnown SuffixOrigin=Link AddressState=Preferred
+    zz_temp_e2e_vnic_test.go:292: [host vEthernet (HypoMux-vnic-03)] IP af=IPv4 addr=192.168.16.<masked>/24 PrefixOrigin=Dhcp SuffixOrigin=Dhcp AddressState=Preferred
+    zz_temp_e2e_vnic_test.go:295: ---------------- REMOVE 开始 ----------------
+    zz_temp_e2e_vnic_test.go:298: [remove] Remove 返回耗时 = 6.514s
+    zz_temp_e2e_vnic_test.go:299: [remove] err = <nil> ; err == nil ? true
+    zz_temp_e2e_vnic_test.go:305: [list post-remove] List() 耗时=3.242s err=<nil> 行数=8
+    zz_temp_e2e_vnic_test.go:305: [list post-remove]   Name="HypoMux-vnic-01"  IF="vEthernet (HypoMux-vnic-01)"  State="ready"   Managed=false InPool=false MAC="02:1a:2b:00:00:00" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:305: [list post-remove]   Name="HypoMux-vnic-02"  IF="vEthernet (HypoMux-vnic-02)"  State="ready"   Managed=false InPool=false MAC="02:1a:2b:00:00:01" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:305: [list post-remove]   Name="Container NIC 9d844023" IF="vEthernet (Default Switch)"   State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="Default Switch" IP="172.25.160.<masked>"
+    zz_temp_e2e_vnic_test.go:305: [list post-remove]   Name="xuni-01"          IF="vEthernet (xuni-01)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:305: [list post-remove]   Name="xuni-02"          IF="vEthernet (xuni-02)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:305: [list post-remove]   Name="xuni-03"          IF="vEthernet (xuni-03)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:305: [list post-remove]   Name="xuni-04"          IF="vEthernet (xuni-04)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:305: [list post-remove]   Name="xuni-05"          IF="vEthernet (xuni-05)"          State="ready"   Managed=false InPool=false MAC="<MAC>" Switch="XuniUplink" IP="192.168.16.<masked>"
+    zz_temp_e2e_vnic_test.go:305: [list post-remove] Managed=false 的只读行 = 8 行 [HypoMux-vnic-01 HypoMux-vnic-02 Container NIC 9d844023 xuni-01 xuni-02 xuni-03 xuni-04 xuni-05]
+    zz_temp_e2e_vnic_test.go:306: [after] List() 调用开始
+    zz_temp_e2e_vnic_test.go:309: [after] List() 耗时 = 47ms err=<nil>
+    zz_temp_e2e_vnic_test.go:310: [after] List() 返回行数 = 8 （期望 0）
+    zz_temp_e2e_vnic_test.go:312: [after]   残留行: Name="HypoMux-vnic-01" InterfaceName="vEthernet (HypoMux-vnic-01)" State="ready" Managed=false MAC="02:1a:2b:00:00:00"
+    zz_temp_e2e_vnic_test.go:312: [after]   残留行: Name="HypoMux-vnic-02" InterfaceName="vEthernet (HypoMux-vnic-02)" State="ready" Managed=false MAC="02:1a:2b:00:00:01"
+    zz_temp_e2e_vnic_test.go:312: [after]   残留行: Name="Container NIC 9d844023" InterfaceName="vEthernet (Default Switch)" State="ready" Managed=false MAC="<MAC>"
+    zz_temp_e2e_vnic_test.go:312: [after]   残留行: Name="xuni-01" InterfaceName="vEthernet (xuni-01)" State="ready" Managed=false MAC="<MAC>"
+    zz_temp_e2e_vnic_test.go:312: [after]   残留行: Name="xuni-02" InterfaceName="vEthernet (xuni-02)" State="ready" Managed=false MAC="<MAC>"
+    zz_temp_e2e_vnic_test.go:312: [after]   残留行: Name="xuni-03" InterfaceName="vEthernet (xuni-03)" State="ready" Managed=false MAC="<MAC>"
+    zz_temp_e2e_vnic_test.go:312: [after]   残留行: Name="xuni-04" InterfaceName="vEthernet (xuni-04)" State="ready" Managed=false MAC="<MAC>"
+    zz_temp_e2e_vnic_test.go:312: [after]   残留行: Name="xuni-05" InterfaceName="vEthernet (xuni-05)" State="ready" Managed=false MAC="<MAC>"
+    zz_temp_e2e_vnic_test.go:315: [post-remove] 台账 NextSeq=4 NextMAC=3 条目数=0
+    zz_temp_e2e_vnic_test.go:316: [post-remove] 出口池 SelectedAdapterIDs=[]string(nil)
+    zz_temp_e2e_vnic_test.go:316: [post-remove] 权重表 [] -> map[]
+    zz_temp_e2e_vnic_test.go:316: [post-remove] Mode="tun" Strategy="round-robin"
+    zz_temp_e2e_vnic_test.go:317: [host vEthernet (HypoMux-vnic-03)] NETADAPTER <absent>
+    zz_temp_e2e_vnic_test.go:317: [host vEthernet (HypoMux-vnic-03)] IP <none>
+    zz_temp_e2e_vnic_test.go:319: [env] 结束时刻=2026-10-04 13:11:07.966
+    zz_temp_e2e_vnic_test.go:320: ---------------- 全流程结束 ----------------
+    zz_temp_e2e_vnic_test.go:185: [cleanup] 台账里已无 HypoMux-vnic-03，无需兜底
+--- PASS: TestZZTempRealMachineE2E (19.40s)
+PASS
+ok  	github.com/Hypostasis-Cat/HypoMux/desktop/internal/services	19.500s

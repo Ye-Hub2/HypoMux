@@ -3,8 +3,8 @@
 package services
 
 import (
+	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -24,6 +24,9 @@ import (
 // 硬约束（reports/vnic/70-frozen-hyperv-interface.md §3.3）：
 //   - 脚本正文是 Go 常量，绝不按输入拼装；所有可变数据走 base64 注入。
 //   - -EncodedCommand 必须是 UTF-16LE base64（Windows PowerShell 5.1 只认这个）。
+//   - -EncodedCommand **之后不得有任何尾随 token**：5.1 会把它当成「第二条命令」，打印用法
+//     横幅后以 0xFFFD0000 退出，脚本从未执行（reports/vnic/76）。payload 只能经
+//     hypervSeededCommandBody 播种进正文第一行。
 //   - 必须用 powershell.exe，不能用 pwsh（模块栈与 cmdlet 行为不一致）。
 //   - ShellExecuteExW + runas 拿不到子进程 stdout，结果只能走结果文件。
 //   - 不新增 exe、不新增 helper 子命令、不复用 EnsureElevated。
@@ -56,6 +59,66 @@ type hypervShellExecuteInfo struct {
 }
 
 func hypervPlatformSupported() bool { return true }
+
+// hypervInventorySnapshot 是**读取路径**的执行层：一条完全常量的 powershell 命令，
+// 结果从 stdout 直接读回来。
+//
+// 刻意不走上面的 hypervExecuteUnelevated —— 那条链路是为「常量脚本 + base64 注入可变
+// 数据 + 结果文件」设计的。读取路径没有任何可变数据（就两条只读查询），所以整条命令行
+// 零插值：既没有注入面，也就不需要 base64 / 结果文件 / -EncodedCommand。
+// reports/vnic/76 记录的故障正是重链路本身出了问题（powershell.exe 不接受
+// -EncodedCommand 之后追加的位置参数），读取路径绕开它是最小且最准的修法。
+//
+// hypervReadInventoryScript 是 Go 常量且只用单引号，因此 exec 的参数转义与 PowerShell
+// 自己的引号解析不会互相干扰。
+func hypervInventorySnapshot(ctx context.Context, timeout time.Duration) (*hypervScriptResult, error) {
+	powershell, err := hypervPowerShellPath()
+	if err != nil {
+		return nil, err
+	}
+	command := exec.CommandContext(ctx, powershell,
+		"-NoProfile",
+		"-NonInteractive",
+		"-ExecutionPolicy", "Bypass",
+		"-Command", hypervReadInventoryScript,
+	)
+	configureBackgroundCommand(command)
+	var stdout, stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	runErr := command.Run()
+
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		if errors.Is(ctxErr, context.DeadlineExceeded) {
+			return nil, errHypervScriptTimeout
+		}
+		return nil, ctxErr
+	}
+
+	result, parseErr := hypervParseInventoryOutput(stdout.Bytes())
+	if parseErr == nil {
+		// stdout 里有合法 JSON 就以它为准：脚本自己把异常包成 ok=false 了，退出码没有
+		// 解释力（PowerShell 任何非零退出都可能只是 exit 语句本身）。
+		return result, nil
+	}
+	if runErr != nil {
+		return nil, fmt.Errorf("%w；powershell.exe %v，stderr：%s", parseErr, runErr, hypervOutputTail(stderr.String()))
+	}
+	return nil, parseErr
+}
+
+// hypervOutputTail 截取 stderr 末段：错误文案比退出码有信息量得多，但也不能让日志爆炸。
+func hypervOutputTail(stderr string) string {
+	const limit = 300
+	trimmed := strings.TrimSpace(stderr)
+	if trimmed == "" {
+		return "（空）"
+	}
+	if len(trimmed) > limit {
+		return trimmed[len(trimmed)-limit:]
+	}
+	return trimmed
+}
 
 // hypervExecuteUnelevated 直接以当前权限跑脚本，**永远不弹 UAC**。List()/Switches()/
 // DHCP 等待都走这条路径（§3.8）。
@@ -179,22 +242,23 @@ func hypervRunElevatedShellExecute(ctx context.Context, payload []byte, timeout 
 	return nil
 }
 
-// hypervPowerShellCommand 组装命令行：常量脚本编成 UTF-16LE base64，可变数据编成
-// UTF-8 base64 后作为 $args[0] 跟在后面。base64 字母表里没有空格，所以拼成
-// ShellExecuteExW 的参数字符串是安全的。
+// hypervPowerShellCommand 组装命令行：payload 经 base64 播种进**常量脚本正文的第一行**，
+// 可变数据因此完全不进命令行本身。
+//
+// 修复前是把 payload base64 作为尾随参数跟在 -EncodedCommand 后面，那在 PowerShell 5.1 上
+// 是非法的（reports/vnic/76）：powershell.exe 把它当成第二条命令，打印用法横幅后以
+// 0xFFFD0000 退出，脚本从未执行、结果文件从未生成，create/remove/waitip 全部必然失败。
+//
+// 现在 arguments 在 -EncodedCommand 之后**没有任何尾随 token**，所以
+//   - 非提权路径（exec.CommandContext）拿到的就是干净的参数数组；
+//   - 提权路径（ShellExecuteExW 把 arguments 用空格 join 回去）也天然安全：正文经
+//     base64 编码后同样不含空格。
 func hypervPowerShellCommand(payload []byte) (string, []string, error) {
 	powershell, err := hypervPowerShellPath()
 	if err != nil {
 		return "", nil, err
 	}
-	arguments := []string{
-		"-NoProfile",
-		"-NonInteractive",
-		"-ExecutionPolicy", "Bypass",
-		"-EncodedCommand", base64.StdEncoding.EncodeToString(hypervUTF16LE(hypervPowerShellScript)),
-		base64.StdEncoding.EncodeToString(payload),
-	}
-	return powershell, arguments, nil
+	return powershell, hypervPowerShellArguments(payload), nil
 }
 
 // hypervPowerShellPath 优先用绝对路径：ShellExecuteExW 的默认工作目录是 System32，

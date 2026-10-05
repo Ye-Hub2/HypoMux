@@ -1,4 +1,4 @@
-import { Browser, Call, Window } from "@wailsio/runtime";
+import { Call, Window } from "@wailsio/runtime";
 import * as DesktopHost from "../../bindings/github.com/Hypostasis-Cat/HypoMux/desktop/internal/platform/wails/desktophost";
 import type { NativeAppearanceResult, ResolvedAppearance, WindowMaterial } from "../theme/appearance.types";
 import { isDesktopRuntime } from "./runtime";
@@ -77,7 +77,6 @@ export const desktopPlatform = {
     ) as Promise<void>).catch(ignoreOutsideWails),
   quit: () => DesktopHost.Quit().catch(ignoreOutsideWails),
   openDirectory: (path: string) => DesktopHost.OpenDirectory(path).catch(ignoreOutsideWails),
-  openURL: (url: string) => Browser.OpenURL(url).catch(ignoreOutsideWails),
   setEngineTrayStatus: (phase: string, mode: string) =>
     Call.ByName(
       "github.com/Hypostasis-Cat/HypoMux/desktop/internal/platform/wails.DesktopHost.SetEngineTrayStatus",

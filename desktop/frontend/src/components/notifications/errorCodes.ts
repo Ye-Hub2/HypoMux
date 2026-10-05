@@ -23,8 +23,6 @@ const rules: ErrorCodeRule[] = [
   { code: "HM-E1303", matches: (_text, key) => key.startsWith("routing:") },
   { code: "HM-E1401", matches: (_text, key) => key.startsWith("health:") },
   { code: "HM-E1501", matches: (_text, key) => key.startsWith("connections:") },
-  { code: "HM-E1601", matches: (text, key) => key.startsWith("about:") && includesAny(text, ["检查更新", "update check", "check for update"]) },
-  { code: "HM-E1602", matches: (_text, key) => key.startsWith("about:") },
   { code: "HM-E1701", matches: (_text, key) => key.startsWith("blocked-domains:") },
   { code: "HM-E1101", matches: (_text, key) => key.startsWith("home:") },
 ];

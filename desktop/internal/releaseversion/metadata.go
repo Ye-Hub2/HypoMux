@@ -22,7 +22,6 @@ func SyncMetadata(root string, v Version, check bool) error {
 		{"build/config.yml", `(?m)(^  version: ")[^"]+`, display, 1},
 		{"frontend/package.json", `("version": ")[^"]+`, display, 1},
 		{"frontend/src/product.ts", `(version: ")[^"]+`, display, 1},
-		{"internal/services/updater.go", `(CurrentVersion\s*= ")[^"]+`, display, 1},
 		{"build/windows/nsis/wails_tools.nsh", `( !define INFO_PRODUCTVERSION ")[^"]+`, display, 1},
 		{"build/windows/info.json", `("(?:file_version|product_version)": ")[^"]+`, numeric, 2},
 		{"build/windows/info.json", `("(?:FileVersion|ProductVersion)": ")[^"]+`, display, 4},

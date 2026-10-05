@@ -9,5 +9,9 @@
 .virtual-adapter-hint { font-size: 12px; line-height: 1.6; color: var(--hm-text-tertiary); }
 .virtual-adapter-intro { display: block; margin-bottom: 10px; font-size: 12px; line-height: 1.6; color: var(--hm-text-tertiary); }
 .virtual-adapter-error { font-size: 12px; line-height: 1.6; color: var(--hm-danger); overflow-wrap: anywhere; }
+/* Runtime detail the backend appended after " | " on a machine-readable hint
+ * marker. The marker itself is translated, so the detail must read as secondary:
+ * its own line, dimmer, and allowed to wrap rather than jam into the sentence. */
+.virtual-adapter-detail { display: block; margin-top: 2px; font-family: var(--hm-font-mono, Consolas, monospace); font-size: 11px; line-height: 1.5; opacity: 0.82; overflow-wrap: anywhere; }
 .virtual-adapter-fields { display: grid; gap: 10px; }
 .virtual-adapter-fields .fui-Input { width: 100%; min-width: 0; }

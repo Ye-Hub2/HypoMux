@@ -94,20 +94,12 @@ it("no longer exposes any AI control in Chinese either", async () => {
 });
 
 describe("TUN settings", () => {
-  it("defaults to stable and persists the chosen update channel separately", async () => {
-    const view = render(<SettingsPage adapterRuntime={[]} onOpenBlockedDomains={() => {}} />);
-    await screen.findByText("Settings synced");
-    const channel = screen.getByRole("combobox", { name: "Update channel" });
-    expect(channel.textContent).toContain("Stable");
-    fireEvent.click(channel);
-    fireEvent.click(await screen.findByRole("option", { name: "Preview (Beta / RC)" }));
-    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(
-      expect.objectContaining({ update_channel: "preview" }), ["update_channel"],
-    ));
-    mocks.get.mockResolvedValue({ ...initial, update_channel: "preview" });
-    view.unmount();
+  it("no longer offers the upstream update channel setting", async () => {
     render(<SettingsPage adapterRuntime={[]} onOpenBlockedDomains={() => {}} />);
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "Update channel" }).textContent).toContain("Preview"));
+    await screen.findByText("Settings synced");
+    expect(screen.queryByRole("combobox", { name: "Update channel" })).toBeNull();
+    expect(screen.queryByText("Update channel")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "settings_language" })).toBeTruthy();
   });
   it("shows a recoverable read failure instead of claiming settings are synced", async () => {
     mocks.get.mockRejectedValueOnce(new Error("Temporarily unavailable"));
@@ -174,14 +166,6 @@ describe("TUN settings", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
-  it("defaults to hiding virtual adapters and persists turning it off", async () => {
-    render(<SettingsPage adapterRuntime={[]} onOpenBlockedDomains={() => {}} />);
-    const toggle = await screen.findByRole("switch", { name: "Hide virtual adapters on Home" });
-    await waitFor(() => expect(toggle.hasAttribute("disabled")).toBe(false));
-    expect((toggle as HTMLInputElement).checked).toBe(true);
-    fireEvent.click(toggle);
-    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ hide_virtual_adapters: false }), ["hide_virtual_adapters"]));
-  });
   it.each([
     ["Mixed (hybrid)", "mixed"],
     ["gVisor (userspace)", "gvisor"],
@@ -238,8 +222,8 @@ describe("manual network drafts", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "HTTP" }), { target: { value: "12345" } });
     fireEvent.change(screen.getByRole("textbox", { name: "settings_dns_server" }), { target: { value: "1.1.1.1" } });
     expect(screen.getByText("Unsaved port and DNS changes")).toBeTruthy();
-    fireEvent.click(screen.getByRole("switch", { name: "Hide virtual adapters on Home" }));
-    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ http_port: 10801, dns_server: "223.5.5.5", hide_virtual_adapters: false }), ["hide_virtual_adapters"]));
+    fireEvent.click(screen.getByRole("switch", { name: "settings_wfp_strict_route" }));
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ http_port: 10801, dns_server: "223.5.5.5", strict_route: false }), ["strict_route"]));
     const save = screen.getByRole("button", { name: "Save ports and DNS" });
     await waitFor(() => expect(save.hasAttribute("disabled")).toBe(false));
     expect((screen.getByRole("spinbutton", { name: "HTTP" }) as HTMLInputElement).value).toBe("12345");
@@ -287,9 +271,9 @@ it("preserves a routing rule written elsewhere after loading the settings page",
   const rule = { match_type: "process", value: "cs2.exe", outbound: "direct", priority: 1 };
   persisted = { ...persisted, routing_rules: [rule] };
   // A field-scoped save must never replay a full payload over the store.
-  fireEvent.click(screen.getByRole("switch", { name: "Hide virtual adapters on Home" }));
+  fireEvent.click(screen.getByRole("switch", { name: "settings_wfp_strict_route" }));
   await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce());
-  expect(mocks.update.mock.calls[0][1]).toEqual(["hide_virtual_adapters"]);
+  expect(mocks.update.mock.calls[0][1]).toEqual(["strict_route"]);
   expect(persisted.routing_rules).toEqual([rule]);
 });
 

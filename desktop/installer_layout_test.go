@@ -291,7 +291,7 @@ func TestLegacyRecoveryIsNarrowlyScoped(t *testing.T) {
 	}
 }
 
-func TestReleasePublishesLegacyUpdaterCompatibleInstallerName(t *testing.T) {
+func TestReleasePublishesVersionedInstallerNameForManualDownloads(t *testing.T) {
 	data, err := os.ReadFile("../.github/workflows/build.yml")
 	if err != nil {
 		t.Fatal(err)
@@ -299,14 +299,15 @@ func TestReleasePublishesLegacyUpdaterCompatibleInstallerName(t *testing.T) {
 	workflow := string(data)
 	if !strings.Contains(workflow, `version="${GITHUB_REF_NAME#v}"`) ||
 		!strings.Contains(workflow, `HypoMux_Setup_${version}.exe`) {
-		t.Fatal("release workflow does not publish the installer name recognized by v2.2.0")
+		t.Fatal("release workflow does not publish the installer under its versioned download name")
 	}
 	for _, required := range []string{
 		`INSTALLER_PATH: desktop/bin/hypomux-amd64-installer.exe`,
 		`cp artifacts/hypomux-amd64-installer.exe "artifacts/HypoMux_Setup_${version}.exe"`,
+		`files: artifacts/${{ steps.stage_release.outputs.installer_name }}`,
 	} {
 		if !strings.Contains(workflow, required) {
-			t.Fatalf("release workflow installer casing is inconsistent: missing %q", required)
+			t.Fatalf("release workflow installer naming is inconsistent: missing %q", required)
 		}
 	}
 	taskData, err := os.ReadFile("build/windows/Taskfile.yml")
@@ -318,34 +319,58 @@ func TestReleasePublishesLegacyUpdaterCompatibleInstallerName(t *testing.T) {
 	}
 }
 
-func TestReleasePublishesOneSignedInstallerThenUpdatesSignedChannel(t *testing.T) {
+func TestReleaseWorkflowsCarryNoUpdateChannelArtifacts(t *testing.T) {
+	workflows := map[string]string{}
+	for _, path := range []string{
+		"../.github/workflows/build.yml",
+		"../.github/workflows/release-smoke.yml",
+		"../.github/workflows/create-release-tag.yml",
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		workflows[path] = string(data)
+	}
+
+	// The in-app updater is gone, so no workflow may mint, sign, or publish an
+	// update manifest. These are the exact tokens the removed steps used.
+	for path, workflow := range workflows {
+		for _, forbidden := range []string{
+			`artifacts/latest.json`,
+			`latest.json.sig`,
+			`UPDATE_MANIFEST_ED25519_PRIVATE_KEY`,
+			`update-manifest-sign`,
+			`update_manifest_ed25519_public_key.txt`,
+			`steps.version.outputs.channel`,
+			`git commit-tree`,
+			`raw.githubusercontent.com`,
+			`-verify-only`,
+		} {
+			if strings.Contains(workflow, forbidden) {
+				t.Fatalf("%s still references removed update-channel machinery: %q", path, forbidden)
+			}
+		}
+	}
+}
+
+func TestReleasePublishesOneSignedInstallerToBothMirrors(t *testing.T) {
 	data, err := os.ReadFile("../.github/workflows/build.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	workflow := string(data)
 	for _, required := range []string{
-		`installer_sha256="$(sha256sum "${installer_path}" | awk '{print $1}')"`,
-		`schema_version: 1`,
-		`urls: [$cnb_url, $github_url]`,
-		`artifacts/latest.json`,
-		`artifacts/latest.json.sig`,
-		`UPDATE_MANIFEST_ED25519_PRIVATE_KEY`,
-		`go -C desktop run ./cmd/update-manifest-sign`,
 		`docker.cnb.cool/looc/git-cnb@sha256:c254172bb9d6025733a0e2991b4a99af8c46aeedcadcb468788ef5a0dc00275c`,
 		`secrets.CNB_TOKEN`,
 		`cnb release get -t "${tag}"`,
 		`cnb release create -t "${tag}"`,
 		`release asset-upload -t "${tag}" -f "${installer}"`,
+		`files: artifacts/${{ steps.stage_release.outputs.installer_name }}`,
 		`HYPOMUX_SIGNED_INSTALLER_TEST`,
-		`git push origin "${channel_commit}:${channel_ref}"`,
-		`git push cnb "${channel_commit}:${channel_ref}"`,
-		`https://raw.githubusercontent.com/Hypostasis-Cat/HypoMux/${{ steps.version.outputs.channel }}/latest.json`,
-		`https://cnb.cool/Hypostasis-Cat/HypoMux/-/git/raw/${{ steps.version.outputs.channel }}/latest.json`,
-		`-verify-only`,
 	} {
 		if !strings.Contains(workflow, required) {
-			t.Fatalf("dual-source release workflow is missing %q", required)
+			t.Fatalf("dual-mirror release workflow is missing %q", required)
 		}
 	}
 	if strings.Count(workflow, `cp artifacts/hypomux-amd64-installer.exe`) != 1 {
@@ -362,14 +387,20 @@ func TestReleasePublishesOneSignedInstallerThenUpdatesSignedChannel(t *testing.T
 		strings.Contains(workflow, `retrying in 15 seconds`) {
 		t.Fatal("release workflow still waits for asynchronous CNB tag mirroring")
 	}
+
+	// Both mirrors must be verified byte-identical only after the installer has
+	// actually been uploaded to them.
+	uploadGitHub := strings.Index(workflow, `- name: Upload installer to GitHub Release`)
+	uploadCNB := strings.Index(workflow, `release asset-upload -t "${tag}" -f "${installer}"`)
 	verifyAssets := strings.Index(workflow, `- name: Verify both Release installers are byte-identical`)
-	publishChannel := strings.Index(workflow, `- name: Publish signed update channel to GitHub and CNB`)
-	if verifyAssets < 0 || publishChannel < 0 || publishChannel < verifyAssets {
-		t.Fatal("update-channel must be published only after both Release installers are verified")
+	if uploadGitHub < 0 || uploadCNB < 0 || verifyAssets < 0 ||
+		verifyAssets <= uploadGitHub || verifyAssets <= uploadCNB {
+		t.Fatalf("both Release installers must be uploaded before they are verified: github-upload=%d cnb-upload=%d verify=%d",
+			uploadGitHub, uploadCNB, verifyAssets)
 	}
 }
 
-func TestReleaseNotesAreTheSingleSourceForReleaseBodiesAndManifest(t *testing.T) {
+func TestReleaseNotesAreTheSingleSourceForReleaseBodies(t *testing.T) {
 	notesPath := "../.github/release-notes/v2.5.8.md"
 	notes, err := os.ReadFile(notesPath)
 	if err != nil {
@@ -388,10 +419,6 @@ func TestReleaseNotesAreTheSingleSourceForReleaseBodiesAndManifest(t *testing.T)
 		`release_notes_path=".github/release-notes/${GITHUB_REF_NAME}.md"`,
 		`if [[ ! -f "${release_notes_path}" ]]`,
 		`if [[ ! -s "${release_notes_path}" ]]`,
-		`--rawfile notes "${release_notes_path}"`,
-		`notes: $notes`,
-		`jq -j '.notes' artifacts/latest.json > artifacts/manifest-notes.md`,
-		`cmp --silent "${release_notes_path}" artifacts/manifest-notes.md`,
 		`name: HypoMux ${{ github.ref_name }}`,
 		`body_path: ${{ steps.release_notes.outputs.path }}`,
 		`release_notes_path="${{ steps.release_notes.outputs.path }}"`,
@@ -402,9 +429,6 @@ func TestReleaseNotesAreTheSingleSourceForReleaseBodiesAndManifest(t *testing.T)
 		if !strings.Contains(workflow, required) {
 			t.Fatalf("release notes are not wired to every release consumer: missing %q", required)
 		}
-	}
-	if strings.Contains(workflow, `notes: ""`) {
-		t.Fatal("update manifest still publishes empty release notes")
 	}
 }
 
@@ -449,18 +473,13 @@ func TestReleaseTrustSmokeWorkflowIsReadOnly(t *testing.T) {
 	}
 	workflow := string(data)
 	for _, required := range []string{
-		`UPDATE_MANIFEST_ED25519_PRIVATE_KEY`,
-		`-verify-public-key "${public_key}"`,
 		`git ls-remote "${repository}"`,
 		`github_commit`,
 		`cnb_commit`,
 		`release get -t "${RELEASE_TAG}"`,
 		`secrets.CNB_TOKEN`,
 		`docker.cnb.cool/looc/git-cnb@sha256:c254172bb9d6025733a0e2991b4a99af8c46aeedcadcb468788ef5a0dc00275c`,
-		`refs/heads/${{ steps.version.outputs.channel }}`,
-		`https://raw.githubusercontent.com/Hypostasis-Cat/HypoMux/${{ steps.version.outputs.channel }}/latest.json`,
-		`https://cnb.cool/Hypostasis-Cat/HypoMux/-/git/raw/${{ steps.version.outputs.channel }}/latest.json`,
-		`-verify-only`,
+		`go -C desktop run ./cmd/release-version -tag "${RELEASE_TAG}"`,
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Fatalf("release trust smoke workflow is missing %q", required)
@@ -473,9 +492,12 @@ func TestReleaseTrustSmokeWorkflowIsReadOnly(t *testing.T) {
 		`action-gh-release`,
 		`git push`,
 		`git commit-tree`,
+		`latest.json`,
+		`update-manifest-sign`,
+		`steps.version.outputs.channel`,
 	} {
 		if strings.Contains(workflow, forbidden) {
-			t.Fatalf("release trust smoke workflow must be read-only: found %q", forbidden)
+			t.Fatalf("release trust smoke workflow must be read-only and updater-free: found %q", forbidden)
 		}
 	}
 }
@@ -506,7 +528,6 @@ func TestPreviewPublishingIsIsolatedFromStable(t *testing.T) {
 	for _, required := range []string{
 		`--prerelease=${{ steps.version.outputs.prerelease }}`,
 		`--make-latest "${{ steps.version.outputs.make_latest }}"`,
-		`channel_ref="refs/heads/${{ steps.version.outputs.channel }}"`,
 		`-tag $env:GITHUB_REF_NAME -write -notes`,
 		`group: hypomux-release-publish`,
 	} {

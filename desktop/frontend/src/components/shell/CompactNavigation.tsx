@@ -5,7 +5,6 @@ import {
   HeartPulse24Regular,
   Home24Filled,
   Home24Regular,
-  Info24Regular,
   PlugConnected24Regular,
   Settings24Regular,
   Toolbox24Regular,
@@ -15,7 +14,7 @@ import {
 import { useLayoutEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/i18n";
 
-export type AppPage = "tools" | "home" | "routing" | "health" | "connections" | "virtual-adapters" | "settings" | "blocked-domains" | "about" | "appearance";
+export type AppPage = "tools" | "home" | "routing" | "health" | "connections" | "virtual-adapters" | "settings" | "blocked-domains" | "appearance";
 
 export function CompactNavigation({
   page,
@@ -31,10 +30,10 @@ export function CompactNavigation({
   const navigationPage = page === "blocked-domains" ? "settings" : page;
   const mainItems = [
     { id: "home", label: t("nav_home"), icon: <Home24Regular />, activeIcon: <Home24Filled /> },
+    { id: "virtual-adapters", label: t("nav_virtual_adapters"), icon: <VirtualNetwork24Regular />, activeIcon: <VirtualNetwork24Filled /> },
     { id: "routing", label: t("nav_routing"), icon: <BranchFork24Regular /> },
     { id: "health", label: t("nav_tools"), icon: <HeartPulse24Regular /> },
     { id: "connections", label: locale === "en" ? "Connections" : "活动连接", icon: <PlugConnected24Regular /> },
-    { id: "virtual-adapters", label: t("nav_virtual_adapters"), icon: <VirtualNetwork24Regular />, activeIcon: <VirtualNetwork24Filled /> },
     { id: "tools", label: locale === "en" ? "Toolbox" : "工具箱", icon: <Toolbox24Regular /> },
     { id: "settings", label: t("nav_settings"), icon: <Settings24Regular /> },
   ];
@@ -120,17 +119,6 @@ export function CompactNavigation({
             </button>
           </Tooltip>
         )}
-        <Tooltip content={t("nav_about")} relationship="label" positioning="after">
-          <button
-            ref={navigationPage === "about" ? activeButtonRef : undefined}
-            className={`nav-button${page === "about" ? " is-active" : ""}`}
-            aria-label={t("nav_about")}
-            aria-current={page === "about" ? "page" : undefined}
-            onClick={() => onPageChange("about")}
-          >
-            <Info24Regular />
-          </button>
-        </Tooltip>
       </div>
     </nav>
   );

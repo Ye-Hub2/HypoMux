@@ -96,9 +96,10 @@ func main() {
 		},
 	})
 
+	// Title 是任务栏与 Alt-Tab 显示的原生标题，与 frontend/src/product.ts 的 edition 保持一致。
 	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:            "main",
-		Title:           "HypoMux",
+		Title:           "HypoMux 自定义版",
 		Width:           1120,
 		Height:          800,
 		MinWidth:        960,
@@ -160,7 +161,6 @@ func main() {
 	}, func() bool {
 		return settingsService.Get().CloseToTray
 	})
-	updaterService := services.NewUpdaterServiceWithSettings(settingsService, desktop.Quit)
 	diagnosticsService = services.NewDiagnosticsService(
 		settingsService, adapterService, desktop, supportLogs,
 		func() error {
@@ -189,7 +189,6 @@ func main() {
 	app.RegisterService(application.NewService(tunService))
 	app.RegisterService(application.NewService(hypervAdapterService))
 	app.RegisterService(application.NewService(blockedDomainService))
-	app.RegisterService(application.NewService(updaterService))
 	app.RegisterService(application.NewService(appearanceService))
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
 		if startSilent {

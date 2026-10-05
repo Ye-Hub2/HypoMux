@@ -53,7 +53,7 @@ export function TitleBar() {
     <header ref={titlebar} className="titlebar">
       <div className="titlebar-identity">
         <ProductMark />
-        <strong>HypoMux</strong>
+        <strong>{`${productInfo.name} ${productInfo.edition[locale === "en" ? "en" : "zh"]}`}</strong>
         <span>v{productInfo.version} · Desktop</span>
       </div>
       <div className="titlebar-drag" />

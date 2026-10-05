@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -50,6 +51,29 @@ const (
 	// hypervExternalSwitchType 是唯一允许建卡的交换机类型（reports/vnic/62 §1 实测
 	// 本机的 XuniUplink 正是 External + AllowManagementOS）。
 	hypervExternalSwitchType = "External"
+
+	// hypervRemoveBatchTimeoutMax 是**批量**删除的父进程超时上限。
+	//
+	// 不能沿用单张的 hypervRemoveScriptTimeout：脚本按 items 逐张串行执行，每张都要
+	// 一次 Get-VMNetworkAdapter + 一次 Remove-VMNetworkAdapter，N 张的耗时是 N 倍。
+	// 所以真实上限按 min(单张超时 × 张数, 本值) 放大（见 hypervRemoveBatchTimeout）。
+	//
+	// 但**必须封顶**：提权子进程杀不掉（见 runScript 的超时语义），父进程放弃等待后
+	// 脚本仍可能在后台继续删。没有上限的话，用户一次勾选 20 张卡就能让这一轮挂住
+	// 30 分钟，而期间 UI 完全没有反馈。180s 是「绝大多数机器删十几张绰绰有余」与
+	// 「用户等不到失去耐心」之间的折中；超时后结果里每张都记失败，引擎有 watchdog 自愈。
+	hypervRemoveBatchTimeoutMax = 180 * time.Second
+
+	// 保护名单。三个前缀/全等值都是 Hyper-V 自己管的对象，删掉会直接打断宿主的
+	// 网络基础设施，不是「本工具该不该管」的问题，而是「Hyper-V 会不会崩」的问题。
+	//
+	//	container nic 前缀 —— Windows 容器 / Docker Desktop 为每个容器网络合成一张。
+	//	    删掉正在跑的容器立刻断网，容器编排随之崩溃。
+	//	vEthernet (Default Switch) —— Hyper-V 自管 Internal 交换机在宿主上的接口。
+	//	    它是所有未显式绑定交换机的虚拟机的默认网关，删掉 = 默认交换机整体失效。
+	hypervContainerNICPrefix  = "container nic"
+	hypervDefaultSwitchName   = "default switch"
+	hypervHostInterfacePrefix = "vEthernet ("
 )
 
 // reports/vnic/62 §4.3 冻结的错误码，前端按 code 前缀映射。
@@ -108,12 +132,45 @@ var (
 	errHypervServiceUnavailable = errors.New("Hyper-V 服务不可用")
 )
 
-// 两条文案常量：模型里没有 restartRequired/dhcp 字段（§3.2 冻结），
-// 所以「需要重启聚合」和「DHCP 超时原因」只能落在 LastError 上。
+// LastError 上承载的东西分两类，**必须**用机器可读前缀区分，否则前端没法本地化：
+//
+//  1. 标记（以 hypervHintCodePrefix 开头）：后端能确定语义的固定事实，交给前端查语言包。
+//     en locale 曾全程显示中文，就是因为这里下发的是中文原文（reports/vnic/79 §A）。
+//  2. 非标记的自由文本：只有后端才知道的运行时细节（PowerShell 退出码、驱动报错），
+//     前端无从翻译，原样显示才是对的。
+//
+// hypervHintDetailSeparator 分隔标记与随附细节：左半段查语言包，右半段原样显示。
 const (
-	hypervDHCPTimeoutHint = "等待 60 秒仍未从交换机拿到可用 IPv4（DHCP 未就绪）；网卡已保留，可稍后重试或直接删除"
-	hypervPoolRestartHint = "已加入出口池，重启 HypoMux 聚合后生效"
+	hypervHintCodePrefix       = "hypomux.hint."
+	hypervHintDetailSeparator  = " | "
+	hypervHintPoolRestart      = hypervHintCodePrefix + "pool_restart"
+	hypervHintPoolUpdateFailed = hypervHintCodePrefix + "pool_update_failed"
 )
+
+// hypervDHCPTimeoutHint 是纯自由文本：它陈述的是真实运行时事实（DHCP 没就绪），
+// 前端无从翻译，原样显示。
+const hypervDHCPTimeoutHint = "等待 60 秒仍未从交换机拿到可用 IPv4（DHCP 未就绪）；网卡已保留，可稍后重试或直接删除"
+
+// hypervHintWithDetail 拼出「机器可读标记 + 只有后端才知道的运行时细节」。
+func hypervHintWithDetail(code, detail string) string {
+	trimmed := strings.TrimSpace(detail)
+	if trimmed == "" {
+		return code
+	}
+	return code + hypervHintDetailSeparator + trimmed
+}
+
+// hypervHintCode 取出 LastError 的机器可读标记；不是标记就返回 ""。
+func hypervHintCode(lastError string) string {
+	trimmed := strings.TrimSpace(lastError)
+	if !strings.HasPrefix(trimmed, hypervHintCodePrefix) {
+		return ""
+	}
+	if index := strings.Index(trimmed, hypervHintDetailSeparator); index >= 0 {
+		trimmed = trimmed[:index]
+	}
+	return trimmed
+}
 
 // HyperVAdapterStatus 是 Hyper-V vNIC 在 Wails 边界的投影。字段与 camelCase JSON tag
 // 由 reports/vnic/70-frozen-hyperv-interface.md §3.2 逐字冻结，前端 binding 由 wails3
@@ -145,6 +202,17 @@ type HyperVSwitch struct {
 	NetAdapterName    string `json:"netAdapterName"`
 }
 
+// HyperVRemoveResult 报告一次批量删除里**单个目标**的结果。
+//
+// 批量删除刻意不「一荣俱荣一损俱损」：一批 5 张里第 3 张失败，另外 4 张必须照删。
+// 因此成败下沉到每张卡上，整批只把「连脚本都没能跑起来」这类致命问题当 error 返回。
+type HyperVRemoveResult struct {
+	Name      string `json:"name"`
+	Removed   bool   `json:"removed"`
+	Reason    string `json:"reason"`    // 非空 = 未删除的原因（面向用户的中文，直接展示）
+	Interface string `json:"interface"` // 宿主网卡别名，如 vEthernet (xuni-01)
+}
+
 // HyperVAdapterService 管理宿主机上的 Hyper-V vNIC。它只做四件事：读台账、读系统实况、
 // 通过一次性提权脚本创建/删除、把新卡并进出口池。它不持有任何路由或网卡状态。
 type HyperVAdapterService struct {
@@ -172,6 +240,9 @@ type HyperVAdapterService struct {
 	inventoryValid bool
 	// inventoryHook 仅供单测注入「系统实况查询失败」的异常路径，生产恒为 nil。
 	inventoryHook func() (hypervInventory, error)
+	// scriptHook 仅供单测注入「提权脚本」的假执行，生产恒为 nil。批量删除要在不碰
+	// 真实 Hyper-V 的前提下断言「N 张卡只弹一次 UAC」，没有这个钩子就只能在真机上验证。
+	scriptHook func(hypervEnvelope, time.Duration, bool) (*hypervScriptResult, error)
 }
 
 // NewHyperVAdapterService 绑定共享的设置与网卡服务。同包内直接访问私有字段是既有做法
@@ -197,6 +268,10 @@ const (
 // reports/vnic/60 实测 Hyper-V 的动态 MAC 池只有 00:15:5D:10:90:00-FF 共 256 个，
 // 撑不住 32 张上限，所以必须显式 -StaticMacAddress 并自己生成。
 const hypervMACOUI = "021A2B"
+
+// hypervMACCounterMax 是 MAC 计数器的上界：hypervMACValue 只渲染 6 位十六进制，
+// 超过 0xFFFFFF 就会绕回、重新发出已经用过的 MAC。
+const hypervMACCounterMax = 0xFFFFFF
 
 // hypervLedgerEntry 是台账一行。AdapterID 存 Hyper-V 的 DeviceId（等价于
 // Get-NetAdapter.InterfaceGuid），它是真机上唯一稳定的主键：Name 会重复（本机实测
@@ -236,10 +311,25 @@ func hypervJobDirectory() string {
 	return filepath.Join(hypervDirectory(), hypervJobDirName)
 }
 
+// hypervFirstAdapterSeq 是首张卡的编号。冻结契约（reports/vnic/60 §编号分配）规定编号
+// 取 01–99，即 index = max(已记录 index) + 1。hypervLedger 的 NextSeq 零值是 0，
+// 直接发号会得到 `HypoMux-vnic-00` —— 真机端到端实测到过（reports/vnic/76 §15），
+// 与契约不符，这里统一抬到 1。
+const hypervFirstAdapterSeq = 1
+
+// normalize 抬高零值计数器。序号只增不减：本方法只把「从没发过号」的 0 抬到起始值，
+// 绝不回收已经发出去的号；已经被 v2.7.0 发出过的 `-00` 仍由 Create 的重名探测跳过。
+func (l *hypervLedger) normalize() {
+	if l.NextSeq < hypervFirstAdapterSeq {
+		l.NextSeq = hypervFirstAdapterSeq
+	}
+}
+
 // loadHypervLedger 读台账。文件不存在是正常的首启状态，返回空台账而不是错误 ——
 // 「没有记录」与「读不出来」的处置完全不同，前者照常跑，后者必须让 List() 报错。
 func loadHypervLedger() (hypervLedger, error) {
 	ledger := hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}}
+	ledger.normalize()
 	data, err := os.ReadFile(hypervLedgerPath())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -251,7 +341,9 @@ func loadHypervLedger() (hypervLedger, error) {
 		return ledger, nil
 	}
 	if err := json.Unmarshal(data, &ledger); err != nil {
-		return hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}},
+		fresh := hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}}
+		fresh.normalize()
+		return fresh,
 			hypervErrorf(hypervCodeLedger, "Hyper-V 台账已损坏，请检查 %s：%v", hypervLedgerPath(), err)
 	}
 	if ledger.Version == 0 {
@@ -260,6 +352,7 @@ func loadHypervLedger() (hypervLedger, error) {
 	if ledger.Adapters == nil {
 		ledger.Adapters = []hypervLedgerEntry{}
 	}
+	ledger.normalize()
 	return ledger, nil
 }
 
@@ -313,6 +406,9 @@ func (l *hypervLedger) removeEntry(name string) {
 // 而不会出现一张我们不敢认领的孤儿卡。
 func (l *hypervLedger) allocateNames(count int, batchID string, createdAt string) []hypervLedgerEntry {
 	entries := make([]hypervLedgerEntry, 0, count)
+	// 发号是唯一入口，在这里兜底：即便调用方直接构造零值台账（单测、未来新调用点），
+	// 也绝不会发出 `-00`。loadHypervLedger 已经抬过一次，这里是幂等的第二道闸。
+	l.normalize()
 	for i := 0; i < count; i++ {
 		seq := l.NextSeq
 		l.NextSeq++
@@ -390,8 +486,41 @@ func hypervHostInterfaceName(name string) string {
 	return "vEthernet (" + strings.TrimSpace(name) + ")"
 }
 
+// hypervPoolKey 把出口池的键统一成宿主别名。冻结契约 reports/vnic/70 §HyperVAdapterStatus
+// 写明 InterfaceName（vEthernet (HypoMux-vnic-01)）才是出口池的键，但两个调用方给的
+// 形式并不一致：Create 侧的 awaitInterfaces 返回 Hyper-V 对象名，Remove 侧传的是
+// 已经拼好的别名。后果是真机端到端实测到的（reports/vnic/76 §16）：
+//  1. 卡进了池但键是裸名，List() 认不出来（inPool 永远 false）；
+//  2. 引擎按别名去绑定会找不到网卡；
+//  3. Remove 按别名去删，删不到 Create 写进去的裸名 ⇒ settings.json 里留下永久悬空键。
+//
+// 在唯一的收口处归一，两个方向就对称了。
+func hypervPoolKey(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return ""
+	}
+	if _, ok := hypervObjectNameFromInterface(trimmed); ok {
+		return trimmed // 已经是宿主别名
+	}
+	if strings.HasPrefix(strings.ToLower(trimmed), strings.ToLower(hypervAdapterNamePrefix)) {
+		return hypervHostInterfaceName(trimmed)
+	}
+	return trimmed // 以太网 这类真实网卡名原样保留
+}
+
 // hypervObjectNameFromInterface 反解 vEthernet (HypoMux-vnic-01) -> HypoMux-vnic-01。
 // 非本命名规范一律拒绝，绝不把用户自己的 vEthernet 网卡带进归属判定。
+// hypervObjectNameOrSelf 把 vEthernet (HypoMux-vnic-01) 还原成 HypoMux-vnic-01，
+// 本来就是对象名就原样返回。awaitAddresses 同时要按别名查 DHCP、按对象名查台账，
+// 两边都得拿到对的形式；调用方传哪种都不能让 hypervHostInterfaceName 再包一层。
+func hypervObjectNameOrSelf(nameOrAlias string) string {
+	if name, ok := hypervObjectNameFromInterface(nameOrAlias); ok {
+		return name
+	}
+	return strings.TrimSpace(nameOrAlias)
+}
+
 func hypervObjectNameFromInterface(alias string) (string, bool) {
 	trimmed := strings.TrimSpace(alias)
 	lower := strings.ToLower(trimmed)
@@ -593,6 +722,86 @@ func (i hypervInventory) hasName(name string) bool {
 		}
 	}
 	return false
+}
+
+// hasNameWithoutMAC 报「同名但 MAC 为空」的幽灵记录是否存在。存在它说明这张卡在
+// Get-VMNetworkAdapter 里确实出现过，只是拿不到可定位的 MAC —— 与「压根没有这张卡」
+// 是两回事，用户要看到的提示也必须不一样。
+func (i hypervInventory) hasNameWithoutMAC(name string) bool {
+	trimmed := strings.TrimSpace(name)
+	for _, item := range i.Adapters {
+		if strings.EqualFold(strings.TrimSpace(item.Name), trimmed) && normalizeHypervMAC(item.MAC) == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// hasMAC 判宿主上是否已经存在这张 MAC 的网卡。MAC 不是「重复就复用」的软约束，而是
+// -StaticMacAddress 的硬约束：撞车时 Add-VMNetworkAdapter 直接失败，整批一张都建不出来。
+func (i hypervInventory) hasMAC(mac string) bool {
+	target := normalizeHypervMAC(mac)
+	if target == "" {
+		return false
+	}
+	for _, item := range i.Adapters {
+		if normalizeHypervMAC(item.MAC) == target {
+			return true
+		}
+	}
+	return false
+}
+
+// hypervSkipOccupiedMAC 从 start 起返回第一个「连续 count 个都未被占用」的 MAC 计数器；
+// 找不到这样的连续段时返回 -1。
+//
+// 必须要求**连续**而不是单个：allocateNames 是按 NextMAC, NextMAC+1, … 递增发号的，
+// 占用集合里只要有一处空洞（比如 4 空闲、5 被占），只跳过单个就会让本批第 2 张正好落在
+// 5 上，等于把 bug 从发号挪到了第 2 张。
+//
+// 台账的 NextMAC 只增不减，**但台账本身会丢**：重装、换机、手删 adapters.json，都会让它
+// 从 0 重新开始，而宿主上上一轮建出来的 HypoMux 卡还在（网卡在、台账没了）。这时发出的
+// 第一个 MAC 会和遗留卡逐字节撞车，用户看到的是「第一次创建就打不出一张卡」。真机复现
+// 见 reports/vnic/79-e2e-regression.md 的 D1：名字有 inventory.hasName 探测，MAC 原本
+// 一道都没有。抽成纯函数是为了能在不触碰真实 Hyper-V 的前提下覆盖这条路径。
+func hypervSkipOccupiedMAC(start int, count int, occupied map[string]bool) int {
+	if count < 1 {
+		return -1
+	}
+	if start < 0 {
+		start = 0
+	}
+	for value := start; value <= hypervMACCounterMax; value++ {
+		free := 0
+		for offset := 0; offset < count; offset++ {
+			candidate := value + offset
+			if candidate > hypervMACCounterMax || occupied[normalizeHypervMAC(hypervMACValue(candidate))] {
+				break
+			}
+			free++
+		}
+		if free == count {
+			return value
+		}
+	}
+	return -1
+}
+
+// hypervOccupiedMACs 汇总「这个 MAC 已经被占了」的所有来源。两个来源都不可省：
+// 宿主实况覆盖台账丢失后残留的孤儿卡，台账覆盖正在创建中、宿主还没回报的预留条目。
+func hypervOccupiedMACs(inventory hypervInventory, ledger *hypervLedger) map[string]bool {
+	occupied := make(map[string]bool, len(inventory.Adapters)+len(ledger.Adapters))
+	for _, item := range inventory.Adapters {
+		if mac := normalizeHypervMAC(item.MAC); mac != "" {
+			occupied[mac] = true
+		}
+	}
+	for _, entry := range ledger.Adapters {
+		if mac := normalizeHypervMAC(entry.MACAddress); mac != "" {
+			occupied[mac] = true
+		}
+	}
+	return occupied
 }
 
 // newHypervJobPath 造一个本次调用的结果文件路径。文件名带纳秒时间戳，天然不会撞车。
@@ -894,7 +1103,7 @@ func (s *HyperVAdapterService) readInventory() (hypervInventory, error) {
 	var readErr error
 	if !hypervPlatformSupported() {
 		readErr = errHypervUnsupported
-	} else if result, err := s.runScript(hypervEnvelope{Op: "inventory"}, hypervReadScriptTimeout, false); err != nil {
+	} else if result, err := s.readHypervInventory(); err != nil {
 		readErr = err
 	} else if result != nil {
 		inventory.Adapters = append(inventory.Adapters, result.Adapters...)
@@ -919,8 +1128,44 @@ func (s *HyperVAdapterService) inventoryOverride() func() (hypervInventory, erro
 	return s.inventoryHook
 }
 
-// runScript 是所有脚本调用的唯一入口。elevated=true 才会触发 UAC，只有 Create 与
-// Remove 传 true。
+// scriptOverride 是**仅供测试注入**的钩子，用来在不弹 UAC、不动真实网卡的前提下断言
+// 「一次批量删除只调一次脚本」与「被保护的目标不进 Items」。生产路径永远是 nil。
+func (s *HyperVAdapterService) scriptOverride() func(hypervEnvelope, time.Duration, bool) (*hypervScriptResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.scriptHook
+}
+
+// readHypervInventory 是读取路径的入口：一条常量 powershell 命令 + stdout JSON。
+//
+// 与 runScript 的关系是**刻意分开的**：runScript 走的是「常量脚本 + base64 注入可变
+// 数据 + 结果文件 + 原子提交」这套给提权写操作用的重机制。读取路径没有可变数据，也就
+// 没有理由背这套重机制 —— reports/vnic/76 记录的「虚拟网卡页读取 Hyper-V 失败」正是
+// 出在这条重链路上（详见该报告）。写路径继续原样使用 runScript。
+func (s *HyperVAdapterService) readHypervInventory() (*hypervScriptResult, error) {
+	base := s.ctx
+	if base == nil {
+		base = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(base, hypervReadScriptTimeout)
+	defer cancel()
+
+	result, err := hypervInventorySnapshot(ctx, hypervReadScriptTimeout)
+	if err != nil {
+		return nil, mapHypervRunError(err, false, "inventory")
+	}
+	if !result.OK {
+		detail := strings.TrimSpace(result.Error)
+		if detail == "" {
+			detail = "结果标记为失败但未给出原因"
+		}
+		return nil, hypervErrorf(hypervCodeScriptFailed, "读取 Hyper-V 状态失败：%s", detail)
+	}
+	return result, nil
+}
+
+// runScript 是所有**写/等待**脚本调用的唯一入口。elevated=true 才会触发 UAC，只有
+// Create、Remove 与 awaitAddresses 的 waitip 段传 true/false，见各调用点。
 //
 // 超时语义（§3.3）：提权子进程杀不掉，所以超时只是「放弃等待」，绝不改台账状态。
 // 脚本本身按 op 自带界且幂等，重试安全。
@@ -929,6 +1174,9 @@ func (s *HyperVAdapterService) inventoryOverride() func() (hypervInventory, erro
 // 必须按「不可知」处理（见 hypervScriptOutcomeUncertain）；**结果文件存在但 ok=false 时
 // result 非 nil**，脚本跑完了并逐条交代了成败，可以放心按它的说法 reconcile。
 func (s *HyperVAdapterService) runScript(envelope hypervEnvelope, timeout time.Duration, elevated bool) (*hypervScriptResult, error) {
+	if override := s.scriptOverride(); override != nil {
+		return override(envelope, timeout, elevated)
+	}
 	if !hypervPlatformSupported() {
 		return nil, errHypervUnsupported
 	}
@@ -1078,17 +1326,35 @@ func (s *HyperVAdapterService) List() ([]HyperVAdapterStatus, error) {
 		rows = append(rows, buildHyperVStatus(entry, inventory, hosts, pool, now))
 		claimed[strings.ToLower(name)] = true
 	}
-	// 台账外但命名合规的卡：只读展示（Managed=false ⇒ Remove 直接拒绝）。这是绝
-	// 误删用户自己网卡的最后一道闸门，也是 §3.4「未登记的一律跳过」的可见化。
+	// 台账外的卡：只读展示（Managed=false ⇒ Remove 直接拒绝）。这是绝误删用户自己
+	// 网卡的最后一道闸门，也是 §3.4「未登记的一律跳过」的可见化。
+	//
+	// 这里刻意**不**用 isHyperVAdapterName 过滤：用户自己手工建的 vNIC（xuni-01 之类）
+	// 同样需要在这个页面看得见——否则「Hyper-V 虚拟网卡」页对既有用户是空的，他们只能
+	// 回到首页去猜那张卡到底在不在。可见性不是纳管：命名不合规的卡在 Remove() 里仍被
+	// :1650 的 not_managed 挡住，台账外的一律被 :1665 挡住，两道闸门都不依赖这个过滤。
 	for _, adapter := range inventory.Adapters {
-		name := strings.TrimSpace(adapter.Name)
-		if !isHyperVAdapterName(name) || claimed[strings.ToLower(name)] {
+		if !hypervShowUnmanagedAdapter(adapter.Name, claimed) {
 			continue
 		}
 		rows = append(rows, buildUnmanagedHyperVStatus(adapter, hosts, pool))
 	}
 	sortHyperVStatuses(rows)
 	return rows, nil
+}
+
+// hypervShowUnmanagedAdapter 判定某张宿主 Hyper-V 网卡是否要作为「未纳管只读行」展示。
+//
+// **不要**在这里加 isHyperVAdapterName 过滤：看上去它能多挡一层误删，实际是零边际收益
+// —— Remove() 已经有两道独立的闸门（:1650 命名规范、:1665 台账归属），两道都不看这个
+// 谓词。代价却是把用户自己建的卡从页面上抹掉，导致这个页面只对「本工具建的卡」有意义。
+// 本函数只回答「可见性」，不回答「可删除性」。
+func hypervShowUnmanagedAdapter(name string, claimed map[string]bool) bool {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return false
+	}
+	return !claimed[strings.ToLower(trimmed)]
 }
 
 // Switches 列出可用的虚拟交换机。命令面 §4：只有同时满足 External +
@@ -1207,15 +1473,7 @@ func hypervReconcileBatch(
 			outcome.purge = append(outcome.purge, entry.Name)
 			continue
 		}
-		message := "未知原因"
-		if runErr != nil {
-			message = runErr.Error()
-		}
-		for _, item := range failures {
-			if strings.EqualFold(strings.TrimSpace(item.Name), entry.Name) && strings.TrimSpace(item.Error) != "" {
-				message = strings.TrimSpace(item.Error)
-			}
-		}
+		message := hypervFailureMessage(failures, entry.Name, runErr)
 		entry.State = hypervStateFailed
 		entry.LastError = fmt.Sprintf("第 %d/%d 张创建失败：%s", index+1, len(reserved), message)
 		outcome.finished = append(outcome.finished, entry)
@@ -1223,6 +1481,38 @@ func hypervReconcileBatch(
 	}
 	outcome.failure = failure
 	return outcome
+}
+
+// hypervFailureMessage 取出这一条失败的可行动原因。
+//
+// 名字匹配是首选——一条批次里哪张卡、什么原因，一一对应。但**不能只有它**：脚本侧
+// Add-VMNetworkAdapter 抛错时未必能把失败归到某个网卡名上（真机上就出现过名字对不上的
+// 情况），这时若只认名字匹配，用户拿到的就是一句「未知原因」，等于没有原因，见
+// reports/vnic/79-e2e-regression.md 的 D2。退而求其次也必须把脚本原文吐出来。
+//
+// 兜底顺序：名字精确匹配 → 单条无归属失败 → 多条拼接 → runErr → 「未知原因」。
+func hypervFailureMessage(failures []hypervScriptFailure, name string, runErr error) string {
+	var unassigned []string
+	for _, item := range failures {
+		text := strings.TrimSpace(item.Error)
+		if text == "" {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(item.Name), name) {
+			return text
+		}
+		unassigned = append(unassigned, text)
+	}
+	if len(unassigned) == 1 {
+		return unassigned[0]
+	}
+	if len(unassigned) > 1 {
+		return strings.Join(unassigned, "；")
+	}
+	if runErr != nil {
+		return runErr.Error()
+	}
+	return "未知原因"
 }
 
 // Create 在外部交换机上批量创建 vNIC。返回本批的立即态（通常 creating），DHCP 等待
@@ -1282,6 +1572,16 @@ func (s *HyperVAdapterService) Create(switchName string, count int) ([]HyperVAda
 			}
 			ledger.NextSeq++
 		}
+		// MAC 同理，而且是必须有的一道：台账丢了但宿主还留着上一轮的卡时，NextMAC 会从
+		// 0 重新开始，发出的第一个 MAC 就逐字节撞车，Add-VMNetworkAdapter 整批失败
+		// （reports/vnic/79 D1 真机复现）。名字能靠 hasName 探测，MAC 没有第二张表可查，
+		// 只能靠宿主实况 + 台账两条来源现算。
+		freeMAC := hypervSkipOccupiedMAC(ledger.NextMAC, count, hypervOccupiedMACs(inventory, ledger))
+		if freeMAC < 0 {
+			return hypervErrorf(hypervCodeUnavailable,
+				"没有连续的 %d 个可用 MAC 计数器（从 %d 起算），请稍后重试", count, ledger.NextMAC)
+		}
+		ledger.NextMAC = freeMAC
 		reserved = ledger.allocateNames(count, batchID, createdAt)
 		for _, entry := range reserved {
 			ledger.upsert(entry)
@@ -1346,11 +1646,22 @@ func (s *HyperVAdapterService) Create(switchName string, count int) ([]HyperVAda
 		// 冻结模型没有 restartRequired 字段，LastError 是唯一能把「需要重启聚合」送到
 		// 前端的通道；只在这一刻出现，List() 后续轮询时台账是干净的，提示自然消失。
 		if row.State != hypervStateFailed {
-			row.LastError = hypervPoolRestartHint
+			row.LastError = hypervHintPoolRestart
 		}
 		rows = append(rows, row)
 	}
-	return rows, outcome.failure
+	return rows, hypervFailureError(outcome.failure)
+}
+
+// hypervFailureError 把可能为 nil 的 *HyperVError 转成真正的 error。直接写
+// `return x`（x 是 *HyperVError）会把 nil 指针装箱成非 nil 接口：调用方看到
+// err != nil 成立，而 HyperVError.Error() 对 nil 接收者返回空串 —— 表现为「卡建好了
+// 却弹一个没有文字的错误」。真机端到端实测到过（reports/vnic/76 §15）。
+func hypervFailureError(failure *HyperVError) error {
+	if failure == nil {
+		return nil
+	}
+	return failure
 }
 
 // awaitBatch 落地 §3.5 的等待预算：Create 立即返回（不阻塞调用方 45s），实际等待在
@@ -1368,10 +1679,90 @@ func (s *HyperVAdapterService) awaitBatch(entries []hypervLedgerEntry) {
 		appeared := s.awaitInterfaces(names, hypervInterfaceTimeout)
 		if len(appeared) > 0 && s.opened() {
 			// 出口池的键是 vEthernet 别名，必须等网卡真的在宿主上出现才能写。
-			_ = s.applyPoolUpdate(appeared, nil)
+			//
+			// 原来这里是 `_ = s.applyPoolUpdate(...)`，错误整个被丢掉（审计 M2）。后果：
+			// 网卡状态「已就绪」、出口池徽章在、用户重启聚合后新卡却完全不生效，而全程
+			// 零根因 —— 用户没有任何线索知道该去查哪里。现在把成败写回台账 LastError，
+			// 前端每行已有的 role="alert" 直接显示它。
+			if err := s.applyPoolUpdate(appeared, nil); err != nil {
+				s.recordPoolHint(appeared, hypervHintWithDetail(hypervHintPoolUpdateFailed, err.Error()))
+			} else {
+				// 成功即自愈：清掉上一轮遗留的「没进出口池」标记，否则它会永久粘住。
+				s.recordPoolHint(appeared, "")
+			}
 		}
 		s.awaitAddresses(appeared)
 	}()
+}
+
+// hypervLastErrorAfterReady 决定 creating→ready 这一跃迁时 LastError 该留下什么。
+//
+// 抽成纯函数是为了能脱离 Hyper-V 单测：awaitAddresses 里 awaitBatch 的
+// applyPoolUpdate 之后才跑，无脑清空会把刚写进去的「没进出口池」标记抹掉 ——
+// 那正是审计 M2 说的「用户全程零根因」。
+func hypervLastErrorAfterReady(lastError string) string {
+	if hypervHintCode(lastError) == hypervHintPoolUpdateFailed {
+		return lastError
+	}
+	return ""
+}
+
+// recordPoolHint 把「这些卡的出口池写入结果」写回台账。lastError 非空时逐字写入；
+// 为空时**只**清掉池写入失败标记，不碰其他任何来源的 LastError（创建失败、DHCP 超时
+// 都不能被出口池的结果顺带抹掉）。
+func (s *HyperVAdapterService) recordPoolHint(names []string, lastError string) {
+	if s == nil || len(names) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(names))
+	for _, name := range names {
+		key := strings.ToLower(strings.TrimSpace(name))
+		if key != "" {
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) == 0 {
+		return
+	}
+	if lastError == "" {
+		// 清除路径先只读确认真有标记，否则每次成功创建都要无谓地重写一次台账文件。
+		// 这里退化成一次冗余写入是最坏情况，不会写错东西。
+		ledger, err := s.readLedger()
+		if err != nil {
+			return
+		}
+		needed := false
+		for _, key := range keys {
+			if entry, index := ledger.find(key); index >= 0 &&
+				hypervHintCode(entry.LastError) == hypervHintPoolUpdateFailed {
+				needed = true
+				break
+			}
+		}
+		if !needed {
+			return
+		}
+	}
+	_ = s.updateLedger(func(ledger *hypervLedger) error {
+		for _, key := range keys {
+			entry, index := ledger.find(key)
+			if index < 0 {
+				continue
+			}
+			if lastError == "" {
+				if hypervHintCode(entry.LastError) == hypervHintPoolUpdateFailed {
+					entry.LastError = ""
+					ledger.Adapters[index] = entry
+				}
+				continue
+			}
+			entry.LastError = lastError
+			ledger.Adapters[index] = entry
+		}
+		return nil
+	})
+	// 台账本身写不进去时没有第二个上报通道，放弃：这条路径上的失败不该反过来
+	// 打断 awaitBatch（网卡已经是好的，不能因为提示写不进去就把它标成 failed）。
 }
 
 // awaitInterfaces 每 500ms 扫一次宿主网卡，等齐 names 或超时。返回实际出现的那些。
@@ -1499,7 +1890,7 @@ func (s *HyperVAdapterService) awaitAddresses(names []string) {
 	}
 	aliases := make([]string, 0, len(names))
 	for _, name := range names {
-		aliases = append(aliases, hypervHostInterfaceName(name))
+		aliases = append(aliases, hypervHostInterfaceName(hypervObjectNameOrSelf(name)))
 	}
 	result, err := s.runScript(hypervEnvelope{
 		Op:             "waitip",
@@ -1516,19 +1907,32 @@ func (s *HyperVAdapterService) awaitAddresses(names []string) {
 	// 补一轮宿主扫描仅供「脚本没提到的网卡」兜底，见 hypervResolveAddresses 的注释。
 	verdict := hypervResolveAddresses(aliases, reported, scanHypervHostInterfaces())
 	_ = s.updateLedger(func(ledger *hypervLedger) error {
-		for _, name := range names {
-			key := strings.ToLower(hypervHostInterfaceName(name))
-			state := verdict[key]
+		// 按下标配对：aliases[i] 是 names[i] 的宿主别名，verdict 按别名索引，
+		// 台账按对象名索引，两边都得拿到对的形式。
+		//
+		// 这里曾把名字包出双层串 "vEthernet (vEthernet (HypoMux-vnic-01))"：verdict 查不到
+		// → ready 恒 false；ledger.find(别名) 在只存对象名的台账里恒返回 -1 → continue。
+		// 两者叠加，台账 state 从头到尾没人改写过，卡永远停在 creating（真机端到端实测到，
+		// reports/vnic/76 §16）。UI 之所以看着正常，只是 List() 会从宿主实况自愈出 ready，
+		// 把这个坏状态盖住了。现在两侧都用 hypervObjectNameOrSelf / aliases 各自的正确形式，
+		// 调用方传对象名还是别名都不会再包出双层串。
+		for i, alias := range aliases {
+			name := hypervObjectNameOrSelf(names[i])
+			state := verdict[strings.ToLower(alias)]
 			entry, index := ledger.find(name)
 			if index < 0 {
 				continue
 			}
 			if state.ready {
 				entry.State = hypervStateReady
-				entry.LastError = ""
+				// 「没进出口池」的标记必须留下：awaitAddresses 跑在 applyPoolUpdate
+				// **之后**（awaitBatch 的顺序），无脑清空会把它抹掉。
+				entry.LastError = hypervLastErrorAfterReady(entry.LastError)
 			} else {
 				entry.State = hypervStateFailed
-				entry.LastError = fmt.Sprintf("%s：%s", hypervHostInterfaceName(name), hypervDHCPTimeoutHint)
+				// 这里反过来让 DHCP 失败覆盖池标记：拿不到地址的卡整体就是坏的，
+				// 「没进出口池」对它没有独立意义。
+				entry.LastError = fmt.Sprintf("%s：%s", alias, hypervDHCPTimeoutHint)
 			}
 			ledger.Adapters[index] = entry
 		}
@@ -1536,8 +1940,167 @@ func (s *HyperVAdapterService) awaitAddresses(names []string) {
 	})
 }
 
+// hypervRemoveRow 是删除流程里「一张目标卡」的全部中间状态。删掉一张卡要经过
+// 保护名单 → 台账归属 → 系统实况确认 → 提权脚本 → 清台账/清池五步，每一步都可能
+// 把它拦下来。把这些状态收进一个结构体，是为了让「批量」与「单张」共用同一条流水线
+// 而不必在两处各写一遍判定。
+type hypervRemoveRow struct {
+	name    string
+	alias   string // 宿主网卡别名，出口池的键
+	managed bool   // 在台账里 ⇒ 本工具创建，删除成功后才清台账
+	entry   hypervLedgerEntry
+	item    hypervEnvelopeItem
+	// cleanupOnly = 系统实况里已经没有这张卡（用户手工删过，或上一轮脚本成功但父进程
+	// 被杀）。此时不重复进提权脚本，但仍要清台账与出口池 —— 幂等。
+	cleanupOnly bool
+	// reason 非空 = 被拦下，没删；这是最终展示给用户的那句话。
+	reason string
+	// scripted = 这一行进了提权脚本（cleanupOnly 的行不进）。
+	scripted bool
+	removed  bool
+}
+
+// normalizeHypervRemoveNames 归一化批量删除的输入：trim、丢空串、按小写去重、保序。
+//
+// 去重按小写走：Windows 的名字不区分大小写，"Xuni-01" 与 "xuni-01" 是同一张卡，
+// 不去重就会把同一张卡塞进同一个 Items 两次，脚本第二遍必然报「找不到」失败。
+// 同时把 vEthernet (...) 形式的宿主别名还原成 Hyper-V 对象名，让两个调用方传哪种都能删。
+func normalizeHypervRemoveNames(names []string) []string {
+	out := make([]string, 0, len(names))
+	seen := make(map[string]bool, len(names))
+	for _, item := range names {
+		trimmed := hypervUnwrapHostInterface(strings.TrimSpace(item))
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if seen[lower] {
+			continue
+		}
+		seen[lower] = true
+		out = append(out, trimmed)
+	}
+	return out
+}
+
+// hypervUnwrapHostInterface 把 vEthernet (xuni-01) 还原成 xuni-01。非该形式原样返回。
+// 注意它与 hypervObjectNameFromInterface 的区别：后者只认 HypoMux 命名规范的别名，
+// 而这里要处理**任意**虚拟网卡名，因为删除入口现在对台账外的卡也开放。
+func hypervUnwrapHostInterface(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if len(trimmed) <= len(hypervHostInterfacePrefix) {
+		return trimmed
+	}
+	if !strings.EqualFold(trimmed[:len(hypervHostInterfacePrefix)], hypervHostInterfacePrefix) {
+		return trimmed
+	}
+	if !strings.HasSuffix(trimmed, ")") {
+		return trimmed
+	}
+	return strings.TrimSpace(trimmed[len(hypervHostInterfacePrefix) : len(trimmed)-1])
+}
+
+// hypervProtectedReason 判定一张卡是否在**硬保护名单**上，返回可直接展示给用户的
+// 中文原因；空串表示不在名单上。
+//
+// 保护名单与「归属判定」是两回事：前者是 Hyper-V 自己的基础设施，删了会打断宿主的
+// 容器网络 / 默认交换机；后者只是「本工具该不该管」。放开后者不影响前者 —— 无论这张卡
+// 在不在台账、名字合不合规范，都不删。
+//
+// 实现成纯函数（不碰 s、不碰系统）就是为了能直接单测；批量路径在读台账、读 inventory、
+// 拼提权脚本**之前**调用它，因此受保护的目标连脚本都进不去。
+func hypervProtectedReason(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return "网卡名为空，无法确认要删的是哪一张，已跳过删除"
+	}
+	lower := strings.ToLower(trimmed)
+	// 输入可能已经带 vEthernet (...) 外壳（如用户从池里直接选），两种形态都判。
+	unwrapped := strings.ToLower(hypervUnwrapHostInterface(trimmed))
+	if strings.HasPrefix(lower, hypervContainerNICPrefix) || strings.HasPrefix(unwrapped, hypervContainerNICPrefix) {
+		return "这是 Windows 容器 / Docker 使用的合成网卡（Container NIC），删除会直接中断容器网络，已跳过删除"
+	}
+	if strings.EqualFold(trimmed, hypervHostInterfaceName(hypervDefaultSwitchName)) ||
+		strings.EqualFold(unwrapped, hypervDefaultSwitchName) {
+		return "这是 Hyper-V 默认交换机（Default Switch）在宿主上的接口，删除会断开所有未绑定交换机的虚拟机网络，已跳过删除"
+	}
+	return ""
+}
+
+// hypervProtectedAdapter 是保护名单的布尔形式，供不需要文案的调用点使用。
+func hypervProtectedAdapter(name string) bool {
+	return hypervProtectedReason(name) != ""
+}
+
+// hypervRemoveBatchTimeout 给出这一批的父进程超时：按张数线性放大，再封顶。
+// 封顶理由见 hypervRemoveBatchTimeoutMax。
+func hypervRemoveBatchTimeout(items int) time.Duration {
+	if items < 1 {
+		items = 1
+	}
+	scaled := hypervRemoveScriptTimeout * time.Duration(items)
+	if scaled > hypervRemoveBatchTimeoutMax {
+		return hypervRemoveBatchTimeoutMax
+	}
+	return scaled
+}
+
+// hypervMACMismatchReason 是第三重闸门的唯一文案来源。Remove() 的错误与
+// RemoveAdapters() 的跳过原因必须逐字一致，否则同一个原因在两条路径上会显示成
+// 两句话，用户会以为是两个不同的问题。
+func hypervMACMismatchReason(target string, liveMAC string, ledgerMAC string) string {
+	return fmt.Sprintf("%s 的 MAC（%s）与台账记录（%s）不一致，已跳过删除",
+		target, formatHypervMAC(liveMAC), formatHypervMAC(ledgerMAC))
+}
+
+// hypervFailureByName 在脚本回报的失败里找有没有指名道姓地提到这张卡。
+func hypervFailureByName(failures []hypervScriptFailure, name string) (hypervScriptFailure, bool) {
+	for _, item := range failures {
+		if strings.EqualFold(strings.TrimSpace(item.Name), name) {
+			return item, true
+		}
+	}
+	return hypervScriptFailure{}, false
+}
+
+// hypervFailuresNamed 判断失败列表里**至少有一条**带了名字。带名字才谈得上按名字归属；
+// 全是匿名的（reports/vnic/79 §D2 实测过 Add 侧出现过）对不上任何一张卡，只能整体归因。
+func hypervFailuresNamed(failures []hypervScriptFailure) bool {
+	for _, item := range failures {
+		if strings.TrimSpace(item.Name) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// RemoveAdapters 批量删除虚拟网卡，**不要求是本工具创建的**。
+//
+// 页面上能被 List() 看到的每张 Hyper-V 虚拟网卡都从这里删：命名规范与台账归属这两道
+// 闸门对批量入口**不再生效**（这正是用户要的），换上来的是三道新约束：
+//
+//  1. 保护名单（hypervProtectedReason）：容器合成网卡与 Default Switch 接口永不删除。
+//  2. 台账内的卡仍受第三重闸门约束（MAC 逐字节一致）—— 这道闸门**不能**一起推翻：
+//     它挡的是「这张卡已经被重建或复用过」，按旧记录去删就是在删别人的东西。
+//  3. 台账外的卡必须在系统实况里此刻确实存在，且 MAC 非空（幽灵记录不可删）。
+//
+// 整批只弹一次 UAC：所有通过判定的卡打进同一个 envelope 走一次提权脚本
+// （脚本的 items 本来就是批量语义，Create 的批量创建就是这么用的）。
+//
+// 错误语义：**单张失败只体现在结果里，不冒泡成 error**。只有「连脚本都跑不起来」
+// 这类整批级问题（服务已关闭、平台不支持、inventory 读取失败、台账/出口池落盘失败）
+// 才返回 error。一张失败、其余照删，是这个 API 的核心承诺。
+func (s *HyperVAdapterService) RemoveAdapters(names []string) ([]HyperVRemoveResult, error) {
+	return s.removeAdapters(names, false)
+}
+
 // Remove 删除一张由本工具创建的网卡。归属三重判定缺一不可：命名规范 → 台账命中 →
 // 删除时 MAC 与系统实况逐字节一致。任一条不成立就拒绝，绝不动用户的网卡。
+//
+// requireLedger=true 让本函数走与批量入口**完全相同**的流水线，但把每一处
+// 「跳过」都还原成原来那个 error —— 错误码、错误文案、返回形态一个字节都没变。
+// 批量入口要的是这些信息放进 Result.Reason 供逐条展示，单张入口要的是立刻返回，
+// 两条路径共用判定逻辑，只在「怎么表达失败」这一处分叉。
 func (s *HyperVAdapterService) Remove(name string) error {
 	if err := s.checkOpen(); err != nil {
 		return err
@@ -1549,64 +2112,244 @@ func (s *HyperVAdapterService) Remove(name string) error {
 	if !hypervPlatformSupported() {
 		return hypervUnsupportedError()
 	}
+	if _, err := s.removeAdapters([]string{target}, true); err != nil {
+		return err
+	}
+	return nil
+}
+
+// removeAdapters 是删除的共同核心。
+//
+// requireLedger=false ⇒ RemoveAdapters：放开命名规范与台账两道闸门，逐条给原因。
+// requireLedger=true  ⇒ Remove：任何一条被拦下都变成 error（语义见上）。
+func (s *HyperVAdapterService) removeAdapters(names []string, requireLedger bool) ([]HyperVRemoveResult, error) {
+	if err := s.checkOpen(); err != nil {
+		return nil, err
+	}
+	if !hypervPlatformSupported() {
+		return nil, hypervUnsupportedError()
+	}
+	// 归一化后为空是**正常**状态：用户重复点删除、或一批全被保护名单拦下，都不该报错。
+	if len(normalizeHypervRemoveNames(names)) == 0 {
+		return nil, nil
+	}
 
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
 	ledger, err := s.readLedger()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	entry, index := ledger.find(target)
-	if index < 0 {
-		return hypervErrorf(hypervCodeNotManaged, "%s 不在 HypoMux 台账中，已跳过删除", target)
+
+	targets := normalizeHypervRemoveNames(names)
+	rows := make([]hypervRemoveRow, 0, len(targets))
+	needInventory := false
+	for _, target := range targets {
+		row := hypervRemoveRow{name: target, alias: hypervHostInterfaceName(target)}
+		// 保护名单第一道，且在读台账 / 读 inventory 之前：受保护的目标连脚本都进不去。
+		if reason := hypervProtectedReason(target); reason != "" {
+			row.reason = reason
+			rows = append(rows, row)
+			continue
+		}
+		entry, index := ledger.find(target)
+		if requireLedger && index < 0 {
+			return nil, hypervErrorf(hypervCodeNotManaged, "%s 不在 HypoMux 台账中，已跳过删除", target)
+		}
+		row.managed = index >= 0
+		row.entry = entry
+		needInventory = true
+		rows = append(rows, row)
+	}
+	// 整批都被保护名单拦下时，压根不需要问系统一次 —— 不弹 PowerShell、不读台账以外的东西。
+	if !needInventory {
+		return hypervRemoveResults(rows), nil
 	}
 
 	// 审计 M2：查询失败与「网卡确实不存在」是两回事，绝不能混为一谈。
 	// readInventory 失败的现实场景不少：策略禁止非提权读 Get-VMNetworkAdapter（72 §7.2
 	// 自己就把这条列为未验证风险）、powershell.exe 被策略拦截、结果文件缺失或超过
-	// hypervMaxResultBytes。此时若继续往下走，found=false 会跳过整段提权删除，却照样
-	// 清台账 + 移出池 ⇒ Hyper-V 对象与宿主接口都还在、台账没了 ⇒ List() 把它当
-	// Managed=false 的只读行展示，Remove() 又永远返回 not_managed，用户在 UI 里彻底
-	// 删不掉这张卡。方向上是失败安全的（不误删用户网卡），但归属系统不自洽。
-	// 这里选择中止并原样保留台账：台账宁可多，不可少。
+	// hypervMaxResultBytes。此时若继续往下走，会跳过整段提权删除，却照样清台账 + 移出池
+	// ⇒ Hyper-V 对象与宿主接口都还在、台账没了 ⇒ 用户在 UI 里彻底删不掉这张卡。
+	// 方向上是失败安全的（不误删用户网卡），但归属系统不自洽。
+	// 这里选择中止并原样保留台账与出口池：台账宁可多，不可少。
 	inventory, invErr := s.readInventory()
 	if invErr != nil {
-		return hypervErrorf(hypervCodeUnavailable,
+		return nil, hypervErrorf(hypervCodeUnavailable,
 			"查询 Hyper-V 现有网卡失败：%v；已中止删除，台账与出口池保持不变", invErr.Error())
 	}
-	if live, found := inventory.find(entry.AdapterID, entry.Name); found {
-		// 第三重判定。台账 MAC 与系统实况不一致，意味着这张卡被重建或复用过；按旧
-		// 记录去删就是在删别人的东西，直接拒绝。
-		if !hypervMACEqual(entry.MACAddress, live.MAC) {
-			return hypervErrorf(hypervCodeNotManaged,
-				"%s 的 MAC（%s）与台账记录（%s）不一致，已跳过删除",
-				target, formatHypervMAC(live.MAC), formatHypervMAC(entry.MACAddress))
-		}
-		if _, err := s.runScript(hypervEnvelope{
-			Op: "remove",
-			Items: []hypervEnvelopeItem{{
-				Name:       entry.Name,
-				MAC:        formatHypervMAC(entry.MACAddress),
-				AdapterID:  entry.AdapterID,
-				SwitchName: entry.SwitchName,
-			}},
-		}, hypervRemoveScriptTimeout, true); err != nil {
-			return err
+	for index := range rows {
+		rows[index].resolve(inventory)
+		// 单张路径把「跳过」翻译回「报错」。文案由 resolve 生成（与批量共用同一句），
+		// 但错误码固定 not_managed —— 这正是改动前那道 MAC 闸门返回的码。
+		if requireLedger && rows[index].reason != "" {
+			return nil, hypervErrorf(hypervCodeNotManaged, "%s", rows[index].reason)
 		}
 	}
 
-	// 幂等：走到这里说明 inventory 查询是**成功**的、只是没找到这张卡 —— 用户手工删过，
-	// 或上一轮脚本成功但父进程被杀（runScript 返回成功、found=false）。两种情况下清掉
-	// 台账与出口池都是对的，不让用户卡在一个永远删不掉的行上。
-	if err := s.updateLedger(func(current *hypervLedger) error {
-		current.removeEntry(target)
-		return nil
-	}); err != nil {
-		return err
+	// 一次提权脚本删 N 张。所有通过判定的行打进同一个 envelope、只调一次 runScript：
+	// 每张卡各弹一次 UAC 的话，用户点 5 张就要确认 5 次管理员权限，且中途一旦有一张
+	// 超时整批就卡死。脚本的 items 本来就是批量语义，Create 的批量创建就是这么用的。
+	items := make([]hypervEnvelopeItem, 0, len(rows))
+	for index := range rows {
+		if rows[index].ready() {
+			rows[index].scripted = true
+			items = append(items, rows[index].item)
+		}
+	}
+	if len(items) > 0 {
+		result, runErr := s.runScript(hypervEnvelope{Op: "remove", Items: items},
+			hypervRemoveBatchTimeout(len(items)), true)
+		// 两条路径共用同一套成败判定，只有「怎么表达失败」在下面分叉。
+		// 单张路径**必须**读 result.Failures：脚本把每张卡的异常逐条 catch 进
+		// $failures 后仍然 Publish $true 'ok' 退出，所以「脚本没报错」根本不等于
+		// 「这张卡删掉了」。漏读它会让脚本失败的网卡被标成 removed=true 并清掉台账与
+		// 出口池 —— 卡还在，归属没了，用户此后永远删不掉它。
+		hypervReconcileRemoveRows(rows, result, runErr)
+		if requireLedger {
+			// runErr（脚本根本跑不起来：提权被拒、平台不支持、结果文件读不到）与逐条失败
+			// 都要变成 error。前者原样上抛，与改动前的 Remove 完全一致；后者是本次补上的
+			// 缺口，用 remove_failed 报错——被删失败的张卡此刻仍在宿主机上，报 not_managed
+			// 会把它说成「不是我们建的」，那是归属问题，不是删除失败。
+			if runErr != nil {
+				return nil, runErr
+			}
+			for index := range rows {
+				row := &rows[index]
+				if !row.scripted || row.removed {
+					continue
+				}
+				return nil, hypervErrorf(hypervCodeRemoveFailed, "%s 删除失败：%s", row.name, row.reason)
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------- 清台账与出口池
+	//
+	// 顺序：**先跑脚本，确认成功之后再清**。反过来（先摘池/清台账、再删网卡）一旦脚本
+	// 失败，用户就会看到「网卡还在、池里没了、台账没了」——他既没法用这张卡，也没法
+	// 让本工具认领它删掉，是最难恢复的状态。正序的窗口只有「一次 Remove-VMNetworkAdapter
+	// 的时长」：脚本已经回报 removed、但台账还没来得及清时进程被杀，留下的只是台账里
+	// 一条指向已删网卡的记录，List() 会把它显示成 absent，重删一次即幂等收干净，
+	// 引擎侧还有 watchdog 自愈。这个方向的残留是自愈的，反方向的残留不是。
+	var managedNames []string
+	var poolAliases []string
+	for _, row := range rows {
+		if !row.removed {
+			continue
+		}
+		if row.managed {
+			managedNames = append(managedNames, row.name)
+		}
+		// 台账外的卡**不动台账**：它本来就不在里面，没有可清的记录。
+		poolAliases = append(poolAliases, row.alias)
+	}
+	if len(managedNames) > 0 {
+		if err := s.updateLedger(func(current *hypervLedger) error {
+			for _, name := range managedNames {
+				current.removeEntry(name)
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
 	}
 	s.invalidateInventory()
-	return s.applyPoolUpdate(nil, []string{hypervHostInterfaceName(target)})
+	if err := s.applyPoolUpdate(nil, poolAliases); err != nil {
+		return nil, err
+	}
+	return hypervRemoveResults(rows), nil
+}
+
+// resolve 用系统实况把这张卡判定成「可删 / 不可删 / 已不存在」，并拼好脚本条目。
+func (r *hypervRemoveRow) resolve(inventory hypervInventory) {
+	if r.managed {
+		// DeviceId 优先、名字兜底：DeviceId 是真机上唯一稳定的主键，名字会重复。
+		live, found := inventory.find(r.entry.AdapterID, r.entry.Name)
+		if !found {
+			// 幂等：inventory 查询是**成功**的、只是没找到这张卡 —— 用户手工删过，
+			// 或上一轮脚本成功但父进程被杀。清掉台账与出口池都是对的，不让用户卡在
+			// 一个永远删不掉的行上，也不用再弹一次 UAC 去删一张已经不在的卡。
+			r.cleanupOnly = true
+			r.removed = true
+			return
+		}
+		// 第三重判定。台账 MAC 与系统实况不一致，意味着这张卡被重建或复用过；按旧
+		// 记录去删就是在删别人的东西，直接拒绝。
+		if !hypervMACEqual(r.entry.MACAddress, live.MAC) {
+			r.reason = hypervMACMismatchReason(r.name, live.MAC, r.entry.MACAddress)
+			return
+		}
+		r.item = hypervEnvelopeItem{
+			Name:       r.entry.Name,
+			MAC:        formatHypervMAC(r.entry.MACAddress),
+			AdapterID:  r.entry.AdapterID,
+			SwitchName: r.entry.SwitchName,
+		}
+		return
+	}
+	// 台账外：跳过前两道闸门后，唯一还能证明「这张卡此刻确实存在、且是可以被指名删除的
+	// 那一条对象」的证据就是系统实况。find 的名字兜底路径要求 MAC 非空，恰好把
+	// reports/vnic/60 实测到的「同名幽灵记录」（MAC 空、DeviceId 空）挡在外面。
+	live, found := inventory.find("", r.name)
+	if !found {
+		if inventory.hasNameWithoutMAC(r.name) {
+			r.reason = fmt.Sprintf("%s 在 Hyper-V 里的记录没有 MAC 与设备 ID（幽灵记录），无法精确定位，已跳过删除", r.name)
+			return
+		}
+		r.reason = fmt.Sprintf("在 Hyper-V 的当前状态里找不到 %s，可能已被手工删除；未做任何改动", r.name)
+		return
+	}
+	// DeviceId 留空：脚本的 remove 分支在 adapterId 为空时按 MAC 定位对象。台账外
+	// 的卡我们没有权威的 DeviceId，与其猜一个不如用实况读回来的 MAC —— 它已经被
+	// find() 验证过非空且确实是这张卡的。
+	r.item = hypervEnvelopeItem{Name: r.name, MAC: formatHypervMAC(live.MAC)}
+}
+
+// ready 判定这一行是否要进提权脚本。
+func (r hypervRemoveRow) ready() bool {
+	return r.reason == "" && !r.cleanupOnly
+}
+
+// hypervReconcileRemoveRows 按脚本回报逐张定成败。**部分失败不中止整批**：一张失败，
+// 其余照删。
+func hypervReconcileRemoveRows(rows []hypervRemoveRow, result *hypervScriptResult, runErr error) {
+	var failures []hypervScriptFailure
+	if result != nil {
+		failures = result.Failures
+	}
+	// certain = 脚本跑完了**并且**逐条交代了成败。只有这种情况下「没被点名失败」才能
+	// 解读成「删成功了」。结果文件缺失意味着无从确知脚本到底做了什么（父进程放弃等待
+	// 或提权进程被杀），此时一张都不能算成功，否则会清掉台账里那些其实还活着的卡。
+	certain := runErr == nil && result != nil && result.OK
+	// 匿名失败（failures 里有条目但都没写 name）对不上任何一张卡，只能整体归因。
+	anonymous := len(failures) > 0 && !hypervFailuresNamed(failures)
+	for index := range rows {
+		row := &rows[index]
+		if !row.scripted {
+			continue
+		}
+		_, named := hypervFailureByName(failures, row.name)
+		if !certain || named || anonymous {
+			row.reason = hypervFailureMessage(failures, row.name, runErr)
+			continue
+		}
+		row.removed = true
+	}
+}
+
+func hypervRemoveResults(rows []hypervRemoveRow) []HyperVRemoveResult {
+	out := make([]HyperVRemoveResult, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, HyperVRemoveResult{
+			Name:      row.name,
+			Removed:   row.removed,
+			Reason:    row.reason,
+			Interface: row.alias,
+		})
+	}
+	return out
 }
 
 // Shutdown 只停自己的后台等待并清理任务目录。刻意不做任何有副作用的动作：不删网卡、
@@ -1650,6 +2393,23 @@ func (s *HyperVAdapterService) applyPoolUpdate(add []string, remove []string) er
 		return nil
 	}
 	current := s.settings.Get()
+	// 两个调用方给的键形式不同（对象名 vs 宿主别名），统一在这里归一，
+	// 否则 add 写进去的键 remove 删不掉。见 hypervPoolKey 的注释。
+	//
+	// 必须写进**新切片**而不是就地改 add/remove：awaitBatch 把 appeared 同时传给了
+	// 本函数和 awaitAddresses。就地归一会把 names 里的对象名就地换成别名，
+	// awaitAddresses 再包一层就成了 "vEthernet (vEthernet (HypoMux-vnic-01))"，
+	// 台账 state 从此永远回写不了（真机端到端实测到，reports/vnic/76 §16）。
+	// 参数切片不是本函数的所有物，就地改就是副作用。
+	normalizedAdd := make([]string, len(add))
+	for i := range add {
+		normalizedAdd[i] = hypervPoolKey(add[i])
+	}
+	normalizedRemove := make([]string, len(remove))
+	for i := range remove {
+		normalizedRemove[i] = hypervPoolKey(remove[i])
+	}
+	add, remove = normalizedAdd, normalizedRemove
 	selected := make([]string, 0, len(current.SelectedAdapterIDs)+len(add))
 	weights := make(map[string]int, len(current.AdapterWeights))
 	for key, value := range current.AdapterWeights {
@@ -1668,6 +2428,18 @@ func (s *HyperVAdapterService) applyPoolUpdate(add []string, remove []string) er
 		}
 		seen[lower] = true
 		selected = append(selected, trimmed)
+	}
+	// remove 名单里的权重键必须**无条件**删掉。上面那个 delete 只在「这个键当时还在
+	// selected 里」时才会执行，而 settings.json 里完全可能存在「有权重、没被选中」的
+	// 悬空键（用户手工改过、或早期版本写权重失败只写了一半）。留着它，调度器就会按
+	// 一张已经不存在的网卡参与权重分配，删网卡反而把调度打歪。
+	//
+	// 放在补默认权重**之前**：万一某个键同时出现在 add 与 remove 里，「新增」赢 ——
+	// 那种调用本就不存在（Create 只传 add、Remove 只传 remove），但顺序上必须有定论。
+	for _, item := range remove {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			delete(weights, trimmed)
+		}
 	}
 	for _, item := range add {
 		trimmed := strings.TrimSpace(item)
@@ -1699,6 +2471,13 @@ func (s *HyperVAdapterService) applyPoolUpdate(add []string, remove []string) er
 		}
 		if same {
 			changed := false
+			// 先比**键数**：下面那个循环只遍历新 map，**纯删除**（权重键没了、值没变）
+			// 一个都遍历不到，changed 会一直是 false，于是这里直接 return nil —— 悬空
+			// 权重键被算成「没有变化」而永远留在 settings.json 里。删网卡正好会走到
+			// 这条路（网卡不在 selected 里、只有权重），所以必须先比长度。
+			if len(weights) != len(current.AdapterWeights) {
+				changed = true
+			}
 			for key, value := range weights {
 				if current.AdapterWeights[key] != value {
 					changed = true
@@ -1775,9 +2554,14 @@ function Mac-Normalize([string]$value) {
 }
 
 function Read-Envelope() {
-  if ($args.Count -lt 1) { return $null }
+  # 这里不能用 $args：PowerShell 里函数的 $args 是这个函数自己的实参，会遮蔽脚本作用域的
+  # $args（reports/vnic/76 实测 function_sees_args=NULL-EMPTY）。所以 payload 只能由 Go 侧
+  # 在正文最前面播种进这个专用变量。变量不存在时 [string] 得到空串，这里 fail-closed 返回
+  # $null，调用方 exit 2。
+  $encoded = [string]$__hypervPayloadB64
+  if ([string]::IsNullOrWhiteSpace($encoded)) { return $null }
   try {
-    $raw = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([string]$args[0]))
+    $raw = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))
     return ($raw | ConvertFrom-Json)
   } catch {
     return $null
@@ -1958,3 +2742,135 @@ try {
 }
 exit 0
 `
+
+// hypervPayloadVariable 是 Go 侧播种 payload 的目标变量名。刻意不叫 $args：PowerShell 里
+// **函数的 $args 是这个函数自己的实参**，会遮蔽脚本作用域的 $args，真机实测
+// （reports/vnic/76）播种 `$args = @('…')` 后脚本作用域确实是 SEEDED-B64，但函数里读到的
+// 仍然是空 —— 而 Read-Envelope 正是函数。所以只能用这个不会被遮蔽的普通变量。
+const hypervPayloadVariable = "__hypervPayloadB64"
+
+// hypervSeededCommandBody 组装写路径 **-EncodedCommand 正文**：在纯常量脚本前面播种一行
+// payload 赋值，脚本本体一个字不动。
+//
+// 为什么必须这样，而不是把 payload 当命令行尾随参数（修复前的做法）：PowerShell 5.1
+// **不接受 -EncodedCommand 之后的位置参数**，会把那个 token 当成「第二条命令」，打印用法
+// 横幅后以 0xFFFD0000 退出，脚本从未执行 —— 真机实测 reports/vnic/76。这条链路上的
+// create / remove / waitip 当时因此全部必然失败。
+//
+// 注入面：payload 先过 base64.StdEncoding，字母表只有 A-Za-z0-9+/= ，不含单引号、反引号、
+// 空格或 $ ，**结构上逃不出那个单引号字面量**；前缀本身是完全常量。hypervPowerShellScript
+// 仍是纯常量，可变数据只出现在这一行播种里。
+//
+// 放在跨平台文件里是为了让单测能在没有 Hyper-V 的 runner 上直接断言命令正文的形状。
+func hypervSeededCommandBody(payload []byte) string {
+	return "$" + hypervPayloadVariable + " = '" +
+		base64.StdEncoding.EncodeToString(payload) + "'\n" +
+		hypervPowerShellScript
+}
+
+// hypervPowerShellArguments 返回 powershell.exe 的参数数组（不含可执行文件本身）。
+//
+// **-EncodedCommand 之后不允许有任何尾随 token**：PowerShell 5.1 会把尾随 token 当成
+// 「第二条命令」，打印用法横幅后以 0xFFFD0000 退出，脚本从未执行 —— reports/vnic/76 的
+// 原始故障。这条断言由 TestHypervPowerShellArgumentsHaveNoTrailingToken 守着。
+//
+// 放在跨平台文件里，使单测在没 Hyper-V 的 runner 上也能断言参数形状。
+func hypervPowerShellArguments(payload []byte) []string {
+	return []string{
+		"-NoProfile",
+		"-NonInteractive",
+		"-ExecutionPolicy", "Bypass",
+		"-EncodedCommand", base64.StdEncoding.EncodeToString(hypervUTF16LE(hypervSeededCommandBody(payload))),
+	}
+}
+
+// ---------------------------------------------------------------- 只读脚本常量
+
+// hypervReadInventoryScript 是**读取路径**专用的常量脚本，与上面的提权脚本刻意分开。
+//
+// 为什么读取路径可以简化到「一条常量命令 + stdout」：它**没有任何可变数据** —— 正文
+// 就是 Get-VMSwitch 与 Get-VMNetworkAdapter -ManagementOS 两条只读查询。于是整条命令行
+// 100% 常量、零插值、零用户输入，注入面天然为零；也就顺理成章地不需要 base64 注入、
+// 不需要结果文件协议、不需要原子提交、不需要 -EncodedCommand、不需要 runas。JSON 直接
+// 走 stdout，由 Go 侧解析。
+//
+// 写路径（create / remove / waitip）有 MAC、名字、别名等可变数据且必须提权，那套
+// base64 + 结果文件 + 原子提交是必需的，刻意保持原样不动。
+//
+// PowerShell 5.1 的两条硬约束（真机实测，reports/vnic/76）：
+//  1. 传入的命令行正文里**不能出现双引号** —— exec 的参数转义与 PowerShell 自己的引号
+//     解析会互相打架；正文一律用单引号。
+//  2. ConvertTo-Json 吃管道里的单元素数组会退化成非数组，所以必须 -InputObject @(...)。
+const hypervReadInventoryScript = `$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$state = $null
+try {
+  Import-Module Hyper-V -ErrorAction Stop
+  $adapters = @()
+  foreach ($adapter in @(Get-VMNetworkAdapter -ManagementOS -ErrorAction Stop)) {
+    $mac = [string]$adapter.MacAddress
+    $device = [string]$adapter.DeviceId
+    # 幽灵记录：MAC/DeviceId 三空却报 Ok 的残留项（reports/vnic/60 实测本机存在）。
+    if ([string]::IsNullOrWhiteSpace($mac)) { continue }
+    if ([string]::IsNullOrWhiteSpace($device)) { continue }
+    $adapters += [pscustomobject]@{ name = [string]$adapter.Name; adapterId = $device; mac = $mac; switchName = [string]$adapter.SwitchName; status = [string]$adapter.Status }
+  }
+  $switches = @()
+  foreach ($item in @(Get-VMSwitch -ErrorAction Stop)) {
+    $uplink = [string]$item.NetAdapterInterfaceDescription
+    $nic = [string]$item.NetAdapterName
+    # 本机实测（reports/vnic/76）：VMSwitch 上根本没有 NetAdapterName 属性（恒为空），
+    # 真正的线索是 NetAdapterInterfaceDescription —— 它是网卡的 *InterfaceDescription*
+    # （例如 Realtek Gaming 2.5GbE Family Controller），不是别名，所以查宿主网卡必须按
+    # -InterfaceDescription 匹配，按 -Name 匹配永远落空。
+    if ([string]$item.SwitchType -eq 'External' -and [string]::IsNullOrWhiteSpace($nic)) {
+      $probe = @(Get-NetAdapter -InterfaceDescription $uplink -ErrorAction SilentlyContinue)
+      if ($probe.Count -gt 0) { $nic = [string]$probe[0].Name }
+    }
+    $switches += [pscustomobject]@{ name = [string]$item.Name; type = [string]$item.SwitchType; allowManagementOs = [bool]$item.AllowManagementOS; uplink = $uplink; netAdapterName = $nic }
+  }
+  $state = [pscustomobject]@{ ok = $true; code = 'ok'; error = ''; adapters = @($adapters); switches = @($switches) }
+} catch {
+  $state = [pscustomobject]@{ ok = $false; code = 'script_failed'; error = [string]$_.Exception.Message; adapters = @(); switches = @() }
+}
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $state -Compress -Depth 4))
+`
+
+// hypervParseInventoryOutput 把只读脚本的 stdout 还原成 hypervScriptResult。纯函数：
+// 不碰系统、不依赖 Hyper-V，因此可以在任何平台（含没有 Hyper-V 的 CI runner）上单测。
+//
+// 容错只有两处，且都是可解释的：
+//  1. 去掉 UTF-8 BOM 与首尾空白 —— Windows 控制台/重定向偶尔会带 BOM。
+//  2. 若 stdout 前面混进了非 JSON 噪声（PowerShell 的警告横幅等），退化成截取第一个
+//     '{' 到最后一个 '}'。绝不做「猜」：截不出合法 JSON 就把原文带回错误里。
+func hypervParseInventoryOutput(stdout []byte) (*hypervScriptResult, error) {
+	raw := strings.TrimPrefix(string(stdout), "\ufeff")
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, errors.New("只读脚本没有向 stdout 输出任何内容")
+	}
+	candidate := trimmed
+	if !strings.HasPrefix(candidate, "{") {
+		start := strings.Index(candidate, "{")
+		end := strings.LastIndex(candidate, "}")
+		if start < 0 || end <= start {
+			return nil, hypervOutputRejected("stdout 不是 JSON", trimmed)
+		}
+		candidate = candidate[start : end+1]
+	}
+	result := &hypervScriptResult{}
+	if err := json.Unmarshal([]byte(candidate), result); err != nil {
+		return nil, hypervOutputRejected("stdout 解析失败", trimmed)
+	}
+	return result, nil
+}
+
+// hypervOutputRejected 把 stdout 原文按超短长度塞进错误里：报错必须能让人一眼看出
+// PowerShell 到底吐了什么，同时不能让一条日志膨胀到不可读。
+func hypervOutputRejected(reason string, raw string) error {
+	const limit = 300
+	if len(raw) > limit {
+		return fmt.Errorf("%s（stdout 前 %d 字节：%q…）", reason, limit, raw[:limit])
+	}
+	return fmt.Errorf("%s（stdout：%q）", reason, raw)
+}
