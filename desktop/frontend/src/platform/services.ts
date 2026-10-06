@@ -41,6 +41,12 @@ export type {
 export type MTUInfo = { adapter_id: string; guid: string; if_index: number; address: string; current: number; original?: number };
 export type MTUResult = MTUInfo & { target: string; recommended: number; at_limit: boolean; tested_at: string };
 
+// One adapter's outcome inside a SetBatch/RestoreBatch run. `changed` is the
+// authoritative "this adapter now carries `after`" signal; a non-empty `error`
+// is a per-adapter failure that never escalates into a batch-level rejection,
+// so a partial batch is still reported row by row.
+export type MTUBatchItem = { adapter_id: string; guid: string; address: string; before: number; after: number; original: number; changed: boolean; error?: string };
+
 // One subscribed domain-category list (issue #62): a whole category routed to a
 // single outbound instead of typing its domains one by one.
 export type RuleSetEntries = { entries: { kind: string; value: string }[]; total: number; downloaded: boolean };
@@ -336,6 +342,10 @@ export const appServices = {
     cancel: () => Call.ByName("github.com/Hypostasis-Cat/HypoMux/desktop/internal/services.MTUService.Cancel") as Promise<void>,
     apply: (id: string) => Call.ByName("github.com/Hypostasis-Cat/HypoMux/desktop/internal/services.MTUService.Apply", id) as Promise<MTUInfo>,
     restore: (id: string) => Call.ByName("github.com/Hypostasis-Cat/HypoMux/desktop/internal/services.MTUService.Restore", id) as Promise<MTUInfo>,
+    setBatch: (ids: string[], value: number) =>
+      Call.ByName("github.com/Hypostasis-Cat/HypoMux/desktop/internal/services.MTUService.SetBatch", ids, value) as Promise<MTUBatchItem[]>,
+    restoreBatch: (ids: string[]) =>
+      Call.ByName("github.com/Hypostasis-Cat/HypoMux/desktop/internal/services.MTUService.RestoreBatch", ids) as Promise<MTUBatchItem[]>,
   },
   diagnostics: {
     latest: () => DiagnosticsService.Latest(),

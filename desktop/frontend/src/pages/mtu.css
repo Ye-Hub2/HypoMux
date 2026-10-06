@@ -43,6 +43,25 @@
 .mtu-panel .mtu-error { color: var(--hm-danger); background: color-mix(in srgb, var(--hm-danger) 8%, var(--hm-surface-fill)); }
 .mtu-panel .mtu-success { color: var(--hm-success); background: color-mix(in srgb, var(--hm-success) 8%, var(--hm-surface-fill)); }
 .mtu-panel .mtu-change-note { margin-top: 16px; color: var(--hm-text-tertiary); font-size: 12px; }
+/* The batch dialog is portaled outside .mtu-panel, so it cannot inherit the
+   .mtu-panel p / .mtu-notice rules and carries its own equivalents. */
+.mtu-batch-body { display: grid; gap: 14px; }
+.mtu-batch-hint { margin: 0; font-size: 13px; line-height: 1.65; color: var(--hm-text-secondary); overflow-wrap: anywhere; }
+.mtu-batch-notice { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--hm-surface-secondary-fill); font-size: 12px; color: var(--hm-text-secondary); overflow-wrap: anywhere; }
+.mtu-batch-body .mtu-batch-error { color: var(--hm-danger); background: color-mix(in srgb, var(--hm-danger) 8%, var(--hm-surface-fill)); }
+.mtu-batch-list { display: grid; gap: 6px; max-height: 240px; overflow: auto; }
+.mtu-batch-list .fui-Checkbox { min-height: 40px; padding: 8px 10px; border: 1px solid var(--hm-outer-border); border-radius: 8px; background: var(--hm-surface-secondary-fill); }
+.mtu-batch-adapter { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mtu-batch-adapter strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.mtu-batch-adapter small { font-size: 12px; color: var(--hm-text-tertiary); font-variant-numeric: tabular-nums; }
+.mtu-batch-body .fui-Input { width: 100%; min-width: 0; min-height: 36px; }
+.mtu-batch-body .fui-Field__hint { margin-top: 6px; font-size: 12px; color: var(--hm-text-tertiary); }
+.mtu-batch-progress { min-height: 24px; }
+.mtu-batch-progress .fui-Spinner { justify-content: flex-start; }
+.mtu-batch-progress .fui-Spinner__label { font-size: 12px; color: var(--hm-text-secondary); }
+.mtu-batch-results { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.mtu-batch-result { padding: 8px 10px; border-radius: 8px; background: var(--hm-surface-secondary-fill); font-size: 12px; color: var(--hm-text-secondary); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.mtu-batch-result.is-changed { color: var(--hm-success); }
 @media (max-width: 1040px) {
   .mtu-panel { padding: 20px; }
   .mtu-page { gap: 12px; }
@@ -50,4 +69,6 @@
 }
 @media (max-width: 760px) {
   .mtu-page { grid-template-columns: minmax(0, 1fr); }
+  .mtu-batch-list { max-height: 200px; }
+  .mtu-batch-adapter { flex-direction: column; gap: 2px; }
 }

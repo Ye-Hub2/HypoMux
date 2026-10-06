@@ -28,12 +28,38 @@ type MTUResult struct {
 	AtLimit     bool      `json:"at_limit"`
 	TestedAt    time.Time `json:"tested_at"`
 }
+type MTUBatchItem struct {
+	AdapterID string `json:"adapter_id"`
+	GUID      string `json:"guid"`
+	Address   string `json:"address"`
+	Before    int    `json:"before"`
+	After     int    `json:"after"`
+	Original  int    `json:"original"`
+	Changed   bool   `json:"changed"`
+	Error     string `json:"error,omitempty"`
+}
+
+const (
+	mtuBatchMax      = 32
+	mtuSetRPC        = "mtu.set"
+	errMTUOutOfRange = "请输入 576–65535 之间的 MTU 值"
+	errMTUNoAdapter  = "请至少选择一张网卡"
+	errMTUTooMany    = "一次最多修改 32 张网卡"
+	errMTUNoOriginal = "没有已保存的原值"
+)
+
 type MTUService struct {
 	mu     sync.Mutex
 	engine *EngineService
 	path   string
 	result *MTUResult
 	cancel context.CancelFunc
+	// Injectable seams: nil means the real Windows read and the engine RPC.
+	readInfo     func(context.Context, string) (MTUInfo, error)
+	setMTU       func(context.Context, MTUInfo, int) error
+	preflight    func(context.Context) (func(), error)
+	preflightSet bool
+	checkEngine  func(context.Context) error
 }
 
 func NewMTUService(engine *EngineService, settings *SettingsService) *MTUService {
@@ -101,8 +127,14 @@ func (s *MTUService) writeOriginals(values map[string]int) error {
 	}
 	return os.Rename(file.Name(), s.path)
 }
+func (s *MTUService) readCurrent(ctx context.Context, id string) (MTUInfo, error) {
+	if s.readInfo != nil {
+		return s.readInfo(ctx, id)
+	}
+	return readMTU(ctx, id)
+}
 func (s *MTUService) read(ctx context.Context, id string) (MTUInfo, error) {
-	info, err := readMTU(ctx, id)
+	info, err := s.readCurrent(ctx, id)
 	if err != nil {
 		return info, err
 	}
@@ -316,4 +348,174 @@ func (s *MTUService) change(id string, restore bool) (MTUInfo, error) {
 		updated.Original = 0
 	}
 	return updated, nil
+}
+
+// Applied through the engine RPC, matching change(). Kept behind a method so
+// batch tests can inject a fake instead of touching the host adapter.
+func (s *MTUService) applyMTU(ctx context.Context, info MTUInfo, value int) error {
+	if s.setMTU != nil {
+		return s.setMTU(ctx, info, value)
+	}
+	var ignored map[string]any
+	return s.engine.client.Request(ctx, mtuSetRPC, map[string]any{"if_index": info.IfIndex, "guid": info.GUID, "expected": info.Current, "value": value}, &ignored)
+}
+
+// dedupeIDs drops empty entries and repeats while keeping the selection order,
+// so a batch never touches one adapter twice.
+func dedupeIDs(ids []string) []string {
+	unique := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	return unique
+}
+
+func (s *MTUService) validateBatch(ids []string) error {
+	if len(ids) == 0 {
+		return errors.New(errMTUNoAdapter)
+	}
+	if len(ids) > mtuBatchMax {
+		return errors.New(errMTUTooMany)
+	}
+	return nil
+}
+
+// SetBatch changes every selected adapter to one MTU value. Per-adapter failures
+// stay in the returned items; the error is reserved for a failed batch check.
+func (s *MTUService) SetBatch(ids []string, value int) ([]MTUBatchItem, error) {
+	unique := dedupeIDs(ids)
+	if err := s.validateBatch(unique); err != nil {
+		return nil, err
+	}
+	if value < 576 || value > 65535 {
+		return nil, errors.New(errMTUOutOfRange)
+	}
+	return s.batch(unique, value, false)
+}
+
+func (s *MTUService) RestoreBatch(ids []string) ([]MTUBatchItem, error) {
+	unique := dedupeIDs(ids)
+	if err := s.validateBatch(unique); err != nil {
+		return nil, err
+	}
+	return s.batch(unique, 0, true)
+}
+
+func (s *MTUService) batch(ids []string, value int, restore bool) ([]MTUBatchItem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cancel != nil {
+		return nil, errors.New("请等待 MTU 检测完成")
+	}
+	timeout := time.Duration(20+15*len(ids)) * time.Second
+	if timeout > 300*time.Second {
+		timeout = 300 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if s.preflightSet {
+		release, err := s.preflight(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
+		return s.run(ctx, ids, value, restore)
+	}
+	release, err := s.stopped(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return s.run(ctx, ids, value, restore)
+}
+
+// Require an elevated Core that announces the mtu.set capability, so a stale
+// Core fails the whole batch before any adapter is touched.
+func (s *MTUService) requireSetCapability(ctx context.Context) error {
+	if s.checkEngine != nil {
+		return s.checkEngine(ctx)
+	}
+	hello, err := s.engine.client.EnsureElevated(ctx)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(hello.Capabilities, mtuSetRPC) {
+		return errors.New("请更新 Core 后再修改 MTU")
+	}
+	return nil
+}
+
+// Per-adapter execution under an already-held lifecycle gate.
+func (s *MTUService) run(ctx context.Context, ids []string, value int, restore bool) ([]MTUBatchItem, error) {
+	if err := s.requireSetCapability(ctx); err != nil {
+		return nil, err
+	}
+	items := make([]MTUBatchItem, 0, len(ids))
+	for _, id := range ids {
+		info, err := s.read(ctx, id)
+		if err != nil {
+			items = append(items, MTUBatchItem{AdapterID: id, Error: err.Error()})
+			continue
+		}
+		item := MTUBatchItem{AdapterID: info.AdapterID, GUID: info.GUID, Address: info.Address, Before: info.Current, Original: info.Original}
+		target := value
+		if restore {
+			if info.Original <= 0 {
+				item.Changed = false
+				item.Error = errMTUNoOriginal
+				items = append(items, item)
+				continue
+			}
+			target = info.Original
+		} else if info.Current == value {
+			item.Changed = false
+			item.Error = ""
+			items = append(items, item)
+			continue
+		}
+		if !restore {
+			if err = s.saveOriginal(info.GUID, info.Current); err != nil {
+				item.Error = fmt.Sprintf("保存原 MTU 失败，未执行修改：%v", err)
+				items = append(items, item)
+				continue
+			}
+		}
+		if err = s.applyMTU(ctx, info, target); err != nil {
+			item.Error = fmt.Sprintf("修改未确认，请刷新当前值；原值已保留，可重试恢复：%v", err)
+			items = append(items, item)
+			continue
+		}
+		updated, err := s.read(ctx, id)
+		if err != nil {
+			item.Error = err.Error()
+			items = append(items, item)
+			continue
+		}
+		if updated.GUID != info.GUID || updated.Current != target {
+			item.Error = "修改后配置发生变化，请刷新并检查网卡；恢复记录已保留"
+			items = append(items, item)
+			continue
+		}
+		item.Changed = true
+		item.After = target
+		if restore {
+			// The MTU is already restored, so a failed cleanup keeps the record
+			// (and the original value) and only adds a warning.
+			if err = s.clearOriginal(info.GUID); err != nil {
+				item.Error = fmt.Sprintf("MTU 已恢复，但清理恢复记录失败：%v", err)
+			} else {
+				item.Original = 0
+			}
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }

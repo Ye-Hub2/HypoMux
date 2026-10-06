@@ -1,7 +1,7 @@
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Dropdown, Field, Input, Option, Spinner } from "@fluentui/react-components";
+import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Dropdown, Field, Input, Option, Spinner } from "@fluentui/react-components";
 import { useEffect, useRef, useState } from "react";
 import { GlassSurface } from "../components/material/GlassSurface";
-import { appServices, type AdapterView, type MTUInfo, type MTUResult } from "../platform/services";
+import { appServices, type AdapterView, type MTUBatchItem, type MTUInfo, type MTUResult } from "../platform/services";
 import type { EnginePhase } from "../state/useEngineState";
 import "./mtu.css";
 
@@ -17,6 +17,12 @@ export function MTUDetectionPage({ adapters, enginePhase, loading, preview, text
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<"apply" | "restore">();
+  const [batch, setBatch] = useState(false);
+  const [batchIds, setBatchIds] = useState<string[]>([]);
+  const [batchValue, setBatchValue] = useState("");
+  const [batchBusy, setBatchBusy] = useState("");
+  const [batchResults, setBatchResults] = useState<MTUBatchItem[]>([]);
+  const [batchError, setBatchError] = useState("");
   const [revision, setRevision] = useState(0);
   const operation = useRef("");
   const generation = useRef(0);
@@ -24,6 +30,15 @@ export function MTUDetectionPage({ adapters, enginePhase, loading, preview, text
   const selected = adapters.find(item => item.id === adapter);
   const source = selected?.address;
   const index = selected?.if_index;
+  const blockedReason = blocked
+    ? text("请先停止网络服务，再检测或修改 MTU，以避免流量接管影响结果。", "Stop the network service before testing or changing MTU.")
+    : preview
+      ? text("浏览器预览仅展示界面，检测与修改需在桌面客户端执行。", "Preview only. Use the desktop app to test or change MTU.")
+      : "";
+  const batchNumber = Number(batchValue);
+  const batchValid = batchValue.trim() !== "" && Number.isInteger(batchNumber) && batchNumber >= 576 && batchNumber <= 65535;
+  const batchLocked = blocked || preview;
+  const adapterName = (id: string) => adapters.find(item => item.id === id)?.name ?? id;
 
   useEffect(() => {
     if (!adapters.some(item => item.id === adapter)) setAdapter(adapters.find(item => item.selected)?.id ?? adapters[0]?.id ?? "");
@@ -69,6 +84,29 @@ export function MTUDetectionPage({ adapters, enginePhase, loading, preview, text
   const cancel = async () => {
     try { await appServices.mtu.cancel(); } catch (reason) { setError(String(reason)); }
   };
+  const openBatch = () => {
+    setBatchIds([]); setBatchValue(""); setBatchResults([]); setBatchError(""); setBatch(true);
+  };
+  const closeBatch = () => {
+    setBatch(false);
+    // A batch that reported at least one change invalidates the single-adapter
+    // reading on the page, so the same revision bump the refresh button uses
+    // reloads it when the dialog closes.
+    if (batchResults.some(item => item.changed)) setRevision(value => value + 1);
+  };
+  const runBatch = async (action: "apply" | "restore") => {
+    if (!batchIds.length || batchBusy || batchLocked) return;
+    if (action === "apply" && !batchValid) return;
+    setBatchBusy(action); setBatchError(""); setBatchResults([]);
+    try {
+      const items = action === "apply"
+        ? await appServices.mtu.setBatch(batchIds, batchNumber)
+        : await appServices.mtu.restoreBatch(batchIds);
+      setBatchResults(items ?? []);
+    } catch (reason) {
+      setBatchError(String(reason));
+    } finally { setBatchBusy(""); }
+  };
 
   return <section className="mtu-page health-view-enter" aria-label={text("MTU 检测", "MTU detection")}>
     <GlassSurface className="mtu-panel mtu-setup">
@@ -105,6 +143,7 @@ export function MTUDetectionPage({ adapters, enginePhase, loading, preview, text
         <Button appearance="primary" disabled={!!busy || !info || !target.trim() || blocked || preview} onClick={() => void run("detect")}>{text("检测推荐 MTU", "Detect recommended MTU")}</Button>
         {busy === "detect" ? <Button onClick={() => void cancel()}>{text("取消检测", "Cancel test")}</Button>
           : <Button appearance="subtle" disabled={!!busy || !adapter} onClick={() => setRevision(value => value + 1)}>{text("刷新当前值", "Refresh current value")}</Button>}
+        <Button appearance="subtle" disabled={!!busy || blocked || preview || !adapters.length} onClick={openBatch}>{text("批量修改 MTU", "Batch change MTU")}</Button>
       </div>
       <div className="mtu-progress" role="status" aria-live="polite">
         {busy ? <Spinner size="tiny" label={busy === "detect" ? text("正在探测并复测，最长约 50 秒…", "Probing and verifying, up to 50 seconds…") : busy === "read" ? text("正在读取…", "Reading…") : text("正在修改并验证…", "Applying and verifying…")} />
@@ -137,6 +176,48 @@ export function MTUDetectionPage({ adapters, enginePhase, loading, preview, text
       <DialogSurface><DialogBody><DialogTitle>{confirm === "restore" ? text("恢复原 MTU", "Restore original MTU") : text("应用推荐 MTU", "Apply recommended MTU")}</DialogTitle>
         <DialogContent>{selected?.name}: {info?.current} → {confirm === "restore" ? info?.original : result?.recommended} bytes<p>{text("连接可能短暂中断。Windows 可能请求管理员授权。", "Connections may briefly drop. Windows may request administrator permission.")}</p></DialogContent>
         <DialogActions><Button onClick={() => setConfirm(undefined)}>{text("取消", "Cancel")}</Button><Button appearance="primary" onClick={() => { if (confirm) void run(confirm); }}>{text("确认修改", "Confirm change")}</Button></DialogActions>
+      </DialogBody></DialogSurface>
+    </Dialog>
+    <Dialog open={batch} onOpenChange={(_, data) => { if (!data.open) closeBatch(); }}>
+      <DialogSurface><DialogBody><DialogTitle>{text("批量修改 MTU", "Batch change MTU")}</DialogTitle>
+        <DialogContent>
+          <div className="mtu-batch-body">
+            <p className="mtu-batch-hint">{text("勾选需要修改的网卡，填写一个统一的目标 MTU。批量恢复原值只按勾选的网卡执行。", "Select the adapters to change and enter one target MTU. Restore original uses the same selection.")}</p>
+            {batchLocked && <p className="mtu-batch-notice" role="status">{blockedReason}</p>}
+            <div className="mtu-batch-list">
+              {adapters.map(item => <Checkbox
+                key={item.id}
+                checked={batchIds.includes(item.id)}
+                disabled={!!batchBusy || batchLocked}
+                onChange={(_, data) => setBatchIds(previous => data.checked ? [...previous, item.id] : previous.filter(id => id !== item.id))}
+                label={<span className="mtu-batch-adapter"><strong>{item.name}</strong><small>{item.address}</small></span>}
+              />)}
+            </div>
+            <Field label={text("目标 MTU", "Target MTU")} hint={text("范围 576–65535。", "Range 576–65535.")}>
+              <Input
+                className="mtu-batch-value"
+                type="number"
+                min={576}
+                max={65535}
+                value={batchValue}
+                disabled={!!batchBusy || batchLocked}
+                onChange={(_, data) => { setBatchValue(data.value); setBatchResults([]); setBatchError(""); }}
+              />
+            </Field>
+            {batchError && <p role="alert" className="mtu-batch-notice mtu-batch-error">{batchError}</p>}
+            {batchBusy && <div className="mtu-batch-progress" role="status" aria-live="polite"><Spinner size="tiny" label={batchBusy === "apply" ? text("正在批量修改并验证…", "Applying to every selected adapter…") : text("正在批量恢复原值…", "Restoring original values…")} /></div>}
+            {!!batchResults.length && <ul className="mtu-batch-results">
+              {batchResults.map(item => <li key={item.adapter_id} className={`mtu-batch-result${item.changed ? " is-changed" : ""}`}>{item.changed
+                ? `${adapterName(item.adapter_id)}${text("：", ": ")}${item.before} → ${item.after}`
+                : `${adapterName(item.adapter_id)}${text("：", ": ")}${item.error || text("无需修改", "No change needed")}`}</li>)}
+            </ul>}
+          </div>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={!!batchBusy} onClick={closeBatch}>{text("关闭", "Close")}</Button>
+          <Button disabled={!batchIds.length || !!batchBusy || batchLocked} onClick={() => void runBatch("restore")}>{text("批量恢复原值", "Restore all")}</Button>
+          <Button appearance="primary" disabled={!batchIds.length || !batchValid || !!batchBusy || batchLocked} onClick={() => void runBatch("apply")}>{text("批量应用", "Apply to all")}</Button>
+        </DialogActions>
       </DialogBody></DialogSurface>
     </Dialog>
   </section>;
