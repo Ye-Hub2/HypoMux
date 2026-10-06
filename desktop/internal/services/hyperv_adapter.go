@@ -287,9 +287,13 @@ type hypervLedgerEntry struct {
 	LastError  string `json:"lastError"`
 }
 
-// hypervLedger 是 adapters.json 的完整结构。NextSeq / NextMAC 只增不减：删除后序号与
-// MAC 都不回收，避免与路由器侧的 MAC↔IP 租约记忆错位（下一次重建拿到同一个 MAC 却是
-// 另一个 IP，会让「按 MAC 限速」的白名单直接失效）。
+// hypervLedger 是 adapters.json 的完整结构。
+//
+// 两个计数器刻意不同命：
+//   - NextSeq 是**历史高水位**，只增不减：它记录「本机发过的最大编号」。编号本身是回收的
+//     （见 allocateNames），但高水位永远不回落，避免台账被手工改小之后重发一个正在用的号。
+//   - NextMAC 严格只增不减：删除后 MAC **绝不回收**。下一次重建如果拿到同一个 MAC 却配了
+//     另一个 IP，路由器侧「按 MAC 限速」的白名单会直接错位（reports/vnic/60）。
 type hypervLedger struct {
 	Version  int                 `json:"version"`
 	NextSeq  int                 `json:"nextSeq"`
@@ -311,14 +315,20 @@ func hypervJobDirectory() string {
 	return filepath.Join(hypervDirectory(), hypervJobDirName)
 }
 
-// hypervFirstAdapterSeq 是首张卡的编号。冻结契约（reports/vnic/60 §编号分配）规定编号
-// 取 01–99，即 index = max(已记录 index) + 1。hypervLedger 的 NextSeq 零值是 0，
-// 直接发号会得到 `HypoMux-vnic-00` —— 真机端到端实测到过（reports/vnic/76 §15），
-// 与契约不符，这里统一抬到 1。
-const hypervFirstAdapterSeq = 1
+// 编号区间的两个端点。冻结契约 reports/vnic/60 §编号分配 规定编号取 01–99：
+//   - 下界是 1。hypervLedger 的 NextSeq 零值是 0，直接发号会得到 `HypoMux-vnic-00` ——
+//     真机端到端实测到过（reports/vnic/76 §15），与契约不符，这里统一抬到 1。
+//   - 上界是 99，且**必须有**。名号格式是 %02d 两位，超过 99 会渲染成三位（`-100`），
+//     既不符合契约，也会把 isHyperVAdapterName 的两位校验冲垮。循环写成无界 for 的话，
+//     一个被灌满的台账会安静地一路发到 `-1000`。
+const (
+	hypervFirstAdapterSeq = 1
+	hypervLastAdapterSeq  = 99
+)
 
-// normalize 抬高零值计数器。序号只增不减：本方法只把「从没发过号」的 0 抬到起始值，
-// 绝不回收已经发出去的号；已经被 v2.7.0 发出过的 `-00` 仍由 Create 的重名探测跳过。
+// normalize 抬高零值计数器。NextSeq 只被抬高、绝不回收：它只是历史高水位，
+// 「哪些编号还在用」由 allocateNames 现场扫台账与系统实况决定。
+// 已经被 v2.7.0 发出过的 `-00` 不会被发第二次 —— allocateNames 从 1 起扫，压根够不着 0。
 func (l *hypervLedger) normalize() {
 	if l.NextSeq < hypervFirstAdapterSeq {
 		l.NextSeq = hypervFirstAdapterSeq
@@ -392,7 +402,9 @@ func (l *hypervLedger) upsert(entry hypervLedgerEntry) {
 	l.Adapters = append(l.Adapters, entry)
 }
 
-// removeEntry 丢掉记录，但绝不回退 NextSeq / NextMAC（序号不回收）。
+// removeEntry 丢掉记录，但**绝不回退 NextSeq / NextMAC**：编号的回收靠 allocateNames
+// 重新扫空闲段实现（所以删掉 01 之后下一次就拿回 01），而不是把计数器拨回去 —— 拨回去
+// 会让「删掉 02」顺手把 03、04… 全让出来，撞上还在用的号。MAC 更是一律不复用。
 func (l *hypervLedger) removeEntry(name string) {
 	_, index := l.find(name)
 	if index < 0 {
@@ -404,23 +416,46 @@ func (l *hypervLedger) removeEntry(name string) {
 // allocateNames 为一次批次预留 count 组 (名字, MAC)。先预留、再提权创建：任何一步
 // 中途崩溃，账面上都已经是我们「打算创建」的卡，List() 只会显示 creating/absent，
 // 而不会出现一张我们不敢认领的孤儿卡。
-func (l *hypervLedger) allocateNames(count int, batchID string, createdAt string) []hypervLedgerEntry {
+//
+// 编号按**最小空闲**发，不是「接着上次往下发」。删掉 -01 之后，下一次创建就拿回 -01：
+// 用户眼里的编号应该跟界面上还剩几张卡对得上，而不是随着删了几轮一路飘到 -47。
+// MAC 仍然从 NextMAC 递增、**绝不回收**（见 hypervLedger 的注释）。
+//
+// taken 用来报告「台账之外还占着这个名字」的系统实况 —— 用户在 Hyper-V 管理器里手工建了
+// 一张同名的卡时，光看台账是发现不了的。传 nil 表示没有第二张表可查（单测场景）。
+//
+// 编号不够时返回**较短**的切片而不是报错：发号是纯函数，报错该由调用方带着「还剩几个、
+// 要几个」的业务上下文来说（见 Create）。调用方必须自己比对 len 与 count。
+func (l *hypervLedger) allocateNames(count int, batchID string, createdAt string, taken func(string) bool) []hypervLedgerEntry {
 	entries := make([]hypervLedgerEntry, 0, count)
 	// 发号是唯一入口，在这里兜底：即便调用方直接构造零值台账（单测、未来新调用点），
 	// 也绝不会发出 `-00`。loadHypervLedger 已经抬过一次，这里是幂等的第二道闸。
 	l.normalize()
-	for i := 0; i < count; i++ {
-		seq := l.NextSeq
-		l.NextSeq++
-		mac := l.NextMAC
-		l.NextMAC++
+	// 上界 hypervLastAdapterSeq 是硬闸：循环必须有界，否则一个被灌满的台账会一路发到
+	// -100、-101……（三位数名号会冲垮 isHyperVAdapterName 的两位校验）。
+	for seq := hypervFirstAdapterSeq; seq <= hypervLastAdapterSeq && len(entries) < count; seq++ {
+		name := fmt.Sprintf("%s%02d", hypervAdapterNamePrefix, seq)
+		// 两类占用都要跳过：台账里的记录，以及系统里真实存在的同名卡。
+		// find 返回的是 (entry, index)，第二值是 int —— 写成布尔判断会被 go vet 拦下。
+		if _, claimedAt := l.find(name); claimedAt >= 0 {
+			continue
+		}
+		if taken != nil && taken(name) {
+			continue
+		}
 		entries = append(entries, hypervLedgerEntry{
-			Name:       fmt.Sprintf("%s%02d", hypervAdapterNamePrefix, seq),
-			MACAddress: formatHypervMAC(hypervMACValue(mac)),
+			Name:       name,
+			MACAddress: formatHypervMAC(hypervMACValue(l.NextMAC)),
 			BatchID:    batchID,
 			State:      hypervStateCreating,
 			CreatedAt:  createdAt,
 		})
+		l.NextMAC++
+		// NextSeq 只当历史高水位：记下「发过的最大编号 + 1」，但绝不因为回收而下调。
+		// 复用空号时发的是一个小编号，这一句不会动它，高水位因此保持单调。
+		if seq >= l.NextSeq {
+			l.NextSeq = seq + 1
+		}
 	}
 	return entries
 }
@@ -1562,19 +1597,11 @@ func (s *HyperVAdapterService) Create(switchName string, count int) ([]HyperVAda
 		if err := hypervCheckBatchCapacity(len(ledger.Adapters), count); err != nil {
 			return err
 		}
-		// 烧掉已被占用的序号：台账里没有、但系统里已经有同名卡（用户手工建的同名卡）
-		// 时绝不覆盖，直接把序号跳过去。
-		for {
-			candidate := fmt.Sprintf("%s%02d", hypervAdapterNamePrefix, ledger.NextSeq)
-			_, claimedAt := ledger.find(candidate)
-			if claimedAt < 0 && !inventory.hasName(candidate) {
-				break
-			}
-			ledger.NextSeq++
-		}
-		// MAC 同理，而且是必须有的一道：台账丢了但宿主还留着上一轮的卡时，NextMAC 会从
-		// 0 重新开始，发出的第一个 MAC 就逐字节撞车，Add-VMNetworkAdapter 整批失败
-		// （reports/vnic/79 D1 真机复现）。名字能靠 hasName 探测，MAC 没有第二张表可查，
+		// MAC 必须留在发号**之前**算：allocateNames 是从 ledger.NextMAC 当前值起取的，
+		// 先发号再算 MAC 就会把已跳过的占用算进分配区间里，白白烧号。
+		// 这一道是必须有的一道：台账丢了但宿主还留着上一轮的卡时，NextMAC 会从 0 重新
+		// 开始，发出的第一个 MAC 就逐字节撞车，Add-VMNetworkAdapter 整批失败
+		// （reports/vnic/79 D1 真机复现）。名字能靠 taken 探测，MAC 没有第二张表可查，
 		// 只能靠宿主实况 + 台账两条来源现算。
 		freeMAC := hypervSkipOccupiedMAC(ledger.NextMAC, count, hypervOccupiedMACs(inventory, ledger))
 		if freeMAC < 0 {
@@ -1582,7 +1609,16 @@ func (s *HyperVAdapterService) Create(switchName string, count int) ([]HyperVAda
 				"没有连续的 %d 个可用 MAC 计数器（从 %d 起算），请稍后重试", count, ledger.NextMAC)
 		}
 		ledger.NextMAC = freeMAC
-		reserved = ledger.allocateNames(count, batchID, createdAt)
+		// 编号按最小空闲分配，inventory.hasName 负责捞出台账之外的真实同名卡。
+		reserved = ledger.allocateNames(count, batchID, createdAt, inventory.hasName)
+		// 凑不满就整批放弃，绝不「发几个算几个」：半批成功会让用户拿到一个说不清的
+		// 界面状态（要 3 张只建了 1 张，还得自己猜哪张没建成）。此时 mutate 返回 error，
+		// updateLedger 不会落盘，刚预留的记录随内存副本一起丢弃。
+		if len(reserved) < count {
+			return hypervErrorf(hypervCodeNameConflict,
+				"编号 %02d–%02d 只剩 %d 个空闲的，创建不了 %d 张，请先删除部分网卡再试",
+				hypervFirstAdapterSeq, hypervLastAdapterSeq, len(reserved), count)
+		}
 		for _, entry := range reserved {
 			ledger.upsert(entry)
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -170,13 +171,20 @@ func TestHypervMACValueLocalAdministration(t *testing.T) {
 	}
 }
 
-// TestHypervLedgerAllocateNamesNoReuse 锁死 §3.7 的「序号不回收」：删除后也不能把序号
-// 退回给下一张卡，否则路由器侧的 MAC↔IP 租约记忆会错位。
-// 冻结契约 reports/vnic/60 §编号分配：编号取 01–99，index = max(已记录) + 1。
-// 零值台账的首张卡必须是 -01，绝不是 -00（真机端到端实测到过 -00，见 76 §15）。
-func TestHypervLedgerAllocateNamesNoReuse(t *testing.T) {
+// TestHypervLedgerAllocateNamesReusesFreedSequence 锁死「编号回收」：删掉 -01 之后，
+// 下一张卡必须拿回 -01，而不是接着往上飘到 -03。用户在界面上看到的编号就该等于「现在
+// 挂着几张卡」，跟「创建过几轮」无关 —— 这是用户提的第一个问题。
+//
+// 两道反向断言同样重要：
+//   - MAC **不得**跟着编号一起回收。编号复用是纯本地行为；MAC 一旦复用，路由器侧的
+//     MAC↔IP 租约记忆就与上一次错位，「按 MAC 限速」的白名单直接失效（reports/vnic/60）。
+//   - NextSeq 是**历史高水位**，回收一个小编号不该把它拉回去；否则台账一旦被手工改小，
+//     就会重发一个正在用的号。
+//
+// 冻结契约 reports/vnic/60 §编号分配：编号取 01–99，按最小空闲分配。
+func TestHypervLedgerAllocateNamesReusesFreedSequence(t *testing.T) {
 	ledger := hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}}
-	first := ledger.allocateNames(2, "batch-a", "2026-01-01T00:00:00Z")
+	first := ledger.allocateNames(2, "batch-a", "2026-01-01T00:00:00Z", nil)
 	if first[0].Name != "HypoMux-vnic-01" || first[1].Name != "HypoMux-vnic-02" {
 		t.Fatalf("allocateNames names = %q, %q", first[0].Name, first[1].Name)
 	}
@@ -186,19 +194,99 @@ func TestHypervLedgerAllocateNamesNoReuse(t *testing.T) {
 	for _, entry := range first {
 		ledger.upsert(entry)
 	}
+	// 发完 01/02 之后的高水位，后面用来验证「回收不动它」。
+	highWater := ledger.NextSeq
 	ledger.removeEntry("HypoMux-vnic-01")
 	if len(ledger.Adapters) != 1 {
 		t.Fatalf("removeEntry 后应有 1 条，实际 %d 条", len(ledger.Adapters))
 	}
-	second := ledger.allocateNames(1, "batch-b", "2026-01-01T00:00:01Z")
-	if second[0].Name == "HypoMux-vnic-01" {
-		t.Fatalf("序号被回收了：%q", second[0].Name)
-	}
-	if second[0].Name != "HypoMux-vnic-03" {
-		t.Fatalf("下一张应是 HypoMux-vnic-03，实际 %q", second[0].Name)
+
+	second := ledger.allocateNames(1, "batch-b", "2026-01-01T00:00:01Z", nil)
+	if second[0].Name != "HypoMux-vnic-01" {
+		t.Fatalf("删掉 01 之后必须拿回 01，实际 %q", second[0].Name)
 	}
 	if second[0].MACAddress == first[0].MACAddress || second[0].MACAddress == first[1].MACAddress {
-		t.Fatalf("MAC 被回收了：%q", second[0].MACAddress)
+		t.Fatalf("编号回收了，但 MAC 被复用了：%q", second[0].MACAddress)
+	}
+	if ledger.NextSeq != highWater {
+		t.Fatalf("回收不该动 NextSeq 高水位：期望仍是 %d，实际 %d", highWater, ledger.NextSeq)
+	}
+	ledger.upsert(second[0])
+
+	// 02 还被占着，第三张只能绕开它去 03：回收的是**空号**，不是「从头重发一遍」——
+	// 否则会把正在用的 02 撞掉。
+	third := ledger.allocateNames(1, "batch-c", "2026-01-01T00:00:02Z", nil)
+	if third[0].Name != "HypoMux-vnic-03" {
+		t.Fatalf("02 仍被占用时第三张应是 HypoMux-vnic-03，实际 %q", third[0].Name)
+	}
+	if third[0].MACAddress == first[1].MACAddress {
+		t.Fatalf("MAC 被复用了：%q", third[0].MACAddress)
+	}
+}
+
+// TestHypervLedgerAllocateNamesSkipsHostOccupiedNames 覆盖 taken 这一路：台账里没有、
+// 但宿主实况里已经有同名卡（用户在 Hyper-V 管理器里手工建的）时，那个编号必须被跳过，
+// 否则 Add-VMNetworkAdapter 会拿一个已存在的名字整批失败。
+func TestHypervLedgerAllocateNamesSkipsHostOccupiedNames(t *testing.T) {
+	ledger := hypervLedger{
+		Version:  hypervLedgerVersion,
+		NextSeq:  5,
+		NextMAC:  7,
+		Adapters: []hypervLedgerEntry{},
+	}
+	ledger.upsert(hypervLedgerEntry{Name: "HypoMux-vnic-01", MACAddress: "02:1a:2b:00:00:09"})
+	hostNames := map[string]bool{"HypoMux-vnic-02": true, "HypoMux-vnic-03": true}
+	taken := func(name string) bool { return hostNames[name] }
+
+	entries := ledger.allocateNames(2, "batch-a", "2026-01-01T00:00:00Z", taken)
+	if len(entries) != 2 {
+		t.Fatalf("应有 2 条预留，实际 %d 条", len(entries))
+	}
+	// 01 被台账占、02/03 被系统实况占 → 只能发 04、05。
+	if entries[0].Name != "HypoMux-vnic-04" || entries[1].Name != "HypoMux-vnic-05" {
+		t.Fatalf("names = %q, %q，期望 04、05", entries[0].Name, entries[1].Name)
+	}
+	// MAC 计数只增不减：被跳过的编号并没有吃掉 MAC。
+	if entries[0].MACAddress != "02:1a:2b:00:00:07" || entries[1].MACAddress != "02:1a:2b:00:00:08" {
+		t.Fatalf("MAC 应接着 NextMAC=7 递增，实际 %q、%q", entries[0].MACAddress, entries[1].MACAddress)
+	}
+	for _, entry := range entries {
+		ledger.upsert(entry)
+	}
+	// 反向对照：taken 传 nil 时，系统实况里那两张同名卡就拦不住了 —— 台账只占着 01/04/05，
+	// 最小空闲直接落到 02。这说明「跳过系统实况」完全是 taken 的功劳，没有别的隐式来源。
+	if next := ledger.allocateNames(1, "batch-b", "2026-01-01T00:00:01Z", nil); len(next) != 1 || next[0].Name != "HypoMux-vnic-02" {
+		t.Fatalf("taken 为 nil 时应发出 HypoMux-vnic-02，实际 %+v", next)
+	}
+}
+
+// TestHypervLedgerAllocateNamesStopsAtLastSequence 锁死循环上界：编号发到 99 就必须停。
+// 名号格式是 %02d，一旦越过 99 就会渲染成三位（-100、-101…），直接冲垮
+// isHyperVAdapterName 的「两位数字」校验，之后所有 Remove 都认不出这张卡。
+// 台账被手工灌满、或历史数据残留时，这道闸是唯一的防线，所以循环必须是**有界**的。
+func TestHypervLedgerAllocateNamesStopsAtLastSequence(t *testing.T) {
+	ledger := hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}}
+	// 填到 98，只剩 99 一个空号。
+	for seq := hypervFirstAdapterSeq; seq < hypervLastAdapterSeq; seq++ {
+		ledger.upsert(hypervLedgerEntry{
+			Name:       fmt.Sprintf("%s%02d", hypervAdapterNamePrefix, seq),
+			MACAddress: formatHypervMAC(hypervMACValue(seq)),
+		})
+	}
+
+	entries := ledger.allocateNames(3, "batch-a", "2026-01-01T00:00:00Z", nil)
+	if len(entries) != 1 {
+		t.Fatalf("只剩 99 一个空号，应返回 1 条，实际 %d 条", len(entries))
+	}
+	if entries[0].Name != "HypoMux-vnic-99" {
+		t.Fatalf("最后一个编号应是 HypoMux-vnic-99，实际 %q", entries[0].Name)
+	}
+
+	// 彻底灌满（01–99 全占）：发不出号，返回空切片交给调用方报错，绝不越过 99。
+	ledger.upsert(entries[0])
+	overflow := ledger.allocateNames(1, "batch-b", "2026-01-01T00:00:01Z", nil)
+	if len(overflow) != 0 {
+		t.Fatalf("编号已用尽时应返回空切片，实际发出 %q（越界成三位数名号了）", overflow[0].Name)
 	}
 }
 
@@ -214,7 +302,7 @@ func TestHypervLedgerFirstSequenceStartsAtOne(t *testing.T) {
 	if fresh.NextSeq != hypervFirstAdapterSeq {
 		t.Fatalf("首启 NextSeq = %d，期望 %d", fresh.NextSeq, hypervFirstAdapterSeq)
 	}
-	entry := fresh.allocateNames(1, "batch-first", "2026-01-01T00:00:00Z")[0]
+	entry := fresh.allocateNames(1, "batch-first", "2026-01-01T00:00:00Z", nil)[0]
 	if entry.Name != "HypoMux-vnic-01" {
 		t.Fatalf("首张卡应为 HypoMux-vnic-01，实际 %q", entry.Name)
 	}
@@ -235,7 +323,7 @@ func TestHypervLedgerNormalizeKeepsAlreadyIssuedZeroSequence(t *testing.T) {
 	if ledger.NextMAC != 1 {
 		t.Fatalf("normalize 不得改动 MAC 计数器，NextMAC = %d", ledger.NextMAC)
 	}
-	entry := ledger.allocateNames(1, "batch-b", "2026-01-01T00:00:00Z")[0]
+	entry := ledger.allocateNames(1, "batch-b", "2026-01-01T00:00:00Z", nil)[0]
 	if entry.Name != "HypoMux-vnic-01" {
 		t.Fatalf("下一张应是 HypoMux-vnic-01，实际 %q", entry.Name)
 	}
@@ -253,7 +341,7 @@ func TestHypervLedgerRoundTrip(t *testing.T) {
 	}
 
 	ledger := hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}}
-	reserved := ledger.allocateNames(3, "batch-a", "2026-01-01T00:00:00Z")
+	reserved := ledger.allocateNames(3, "batch-a", "2026-01-01T00:00:00Z", nil)
 	for _, entry := range reserved {
 		ledger.upsert(entry)
 	}
@@ -1338,7 +1426,7 @@ func TestRemoveKeepsLedgerWhenInventoryQueryFails(t *testing.T) {
 
 	// 台账里登记一张卡，出口池里也有它。
 	ledger := hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}}
-	allocated := ledger.allocateNames(1, "batch-a", "2026-01-01T00:00:00Z")
+	allocated := ledger.allocateNames(1, "batch-a", "2026-01-01T00:00:00Z", nil)
 	for _, entry := range allocated {
 		ledger.upsert(entry)
 	}
@@ -1553,7 +1641,7 @@ func TestHypervScriptOutcomeUncertain(t *testing.T) {
 // 状态」。现在超时必须：一条都不抹、整批标 failed、返回可辨识的 create_timeout。
 func TestHypervReconcileBatchTimeoutKeepsLedger(t *testing.T) {
 	ledger := hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}}
-	reserved := ledger.allocateNames(3, "batch-a", "2026-01-01T00:00:00Z")
+	reserved := ledger.allocateNames(3, "batch-a", "2026-01-01T00:00:00Z", nil)
 	for _, entry := range reserved {
 		ledger.upsert(entry)
 	}
@@ -1602,7 +1690,7 @@ func TestHypervReconcileBatchTimeoutKeepsLedger(t *testing.T) {
 // 硬失败之后未处理的条目从未存在过，可以抹掉。
 func TestHypervReconcileBatchReportedFailure(t *testing.T) {
 	ledger := hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}}
-	reserved := ledger.allocateNames(3, "batch-a", "2026-01-01T00:00:00Z")
+	reserved := ledger.allocateNames(3, "batch-a", "2026-01-01T00:00:00Z", nil)
 	created := map[string]hypervScriptAdapter{
 		"hypomux-vnic-01": {Name: "HypoMux-vnic-01", AdapterID: "{g0}", MAC: "021A2B000000", SwitchName: "XuniUplink"},
 	}
@@ -1945,7 +2033,7 @@ func TestRecordPoolHintSurfacesAndSelfHeals(t *testing.T) {
 	t.Cleanup(service.Shutdown)
 
 	ledger := hypervLedger{Version: hypervLedgerVersion, Adapters: []hypervLedgerEntry{}}
-	allocated := ledger.allocateNames(2, "batch-a", "2026-01-01T00:00:00Z")
+	allocated := ledger.allocateNames(2, "batch-a", "2026-01-01T00:00:00Z", nil)
 	for _, entry := range allocated {
 		ledger.upsert(entry)
 	}
