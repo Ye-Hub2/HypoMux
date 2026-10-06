@@ -49,6 +49,8 @@
 .mtu-batch-hint { margin: 0; font-size: 13px; line-height: 1.65; color: var(--hm-text-secondary); overflow-wrap: anywhere; }
 .mtu-batch-notice { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--hm-surface-secondary-fill); font-size: 12px; color: var(--hm-text-secondary); overflow-wrap: anywhere; }
 .mtu-batch-body .mtu-batch-error { color: var(--hm-danger); background: color-mix(in srgb, var(--hm-danger) 8%, var(--hm-surface-fill)); }
+.mtu-batch-toolbar { display: flex; justify-content: flex-end; }
+.mtu-batch-toolbar .fui-Button { min-height: 28px; padding-inline: 8px; font-size: 12px; }
 .mtu-batch-list { display: grid; gap: 6px; max-height: 240px; overflow: auto; }
 .mtu-batch-list .fui-Checkbox { min-height: 40px; padding: 8px 10px; border: 1px solid var(--hm-outer-border); border-radius: 8px; background: var(--hm-surface-secondary-fill); }
 .mtu-batch-adapter { display: flex; align-items: baseline; gap: 8px; min-width: 0; }

@@ -95,6 +95,18 @@ it("applies one MTU to every selected adapter and reports each result in the dia
   expect(screen.getByText("Wi-Fi：需要管理员授权")).toBeTruthy();
   expect(screen.getByRole("dialog")).toBeTruthy();
 });
+it("selects and clears every adapter at once from the batch dialog", async () => {
+  render(<MTUDetectionPage {...props} adapters={batchAdapters} />);
+  await waitFor(() => expect((screen.getByRole("button", { name: "批量修改 MTU" }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole("button", { name: "批量修改 MTU" }));
+  await screen.findAllByRole("checkbox");
+  fireEvent.click(screen.getByRole("button", { name: "全选" }));
+  fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "1400" } });
+  fireEvent.click(screen.getByRole("button", { name: "批量应用" }));
+  await waitFor(() => expect(api.setBatch).toHaveBeenCalledWith(["Ethernet", "Wi-Fi"], 1400));
+  fireEvent.click(screen.getByRole("button", { name: "清空选择" }));
+  expect((screen.getByRole("button", { name: "批量应用" }) as HTMLButtonElement).disabled).toBe(true);
+});
 it("restores the original MTU of the selected adapter from the batch dialog", async () => {
   api.restoreBatch.mockResolvedValue([
     { adapter_id: "Wi-Fi", guid: "b", address: "192.0.2.11", before: 1400, after: 1500, original: 1500, changed: true },

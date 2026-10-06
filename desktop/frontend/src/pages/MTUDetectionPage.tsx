@@ -38,6 +38,7 @@ export function MTUDetectionPage({ adapters, enginePhase, loading, preview, text
   const batchNumber = Number(batchValue);
   const batchValid = batchValue.trim() !== "" && Number.isInteger(batchNumber) && batchNumber >= 576 && batchNumber <= 65535;
   const batchLocked = blocked || preview;
+  const allBatchSelected = adapters.length > 0 && adapters.every(item => batchIds.includes(item.id));
   const adapterName = (id: string) => adapters.find(item => item.id === id)?.name ?? id;
 
   useEffect(() => {
@@ -184,6 +185,9 @@ export function MTUDetectionPage({ adapters, enginePhase, loading, preview, text
           <div className="mtu-batch-body">
             <p className="mtu-batch-hint">{text("勾选需要修改的网卡，填写一个统一的目标 MTU。批量恢复原值只按勾选的网卡执行。", "Select the adapters to change and enter one target MTU. Restore original uses the same selection.")}</p>
             {batchLocked && <p className="mtu-batch-notice" role="status">{blockedReason}</p>}
+            <div className="mtu-batch-toolbar">
+              <Button size="small" appearance="subtle" disabled={!!batchBusy || batchLocked || !adapters.length} onClick={() => setBatchIds(allBatchSelected ? [] : adapters.map(item => item.id))}>{allBatchSelected ? text("清空选择", "Clear selection") : text("全选", "Select all")}</Button>
+            </div>
             <div className="mtu-batch-list">
               {adapters.map(item => <Checkbox
                 key={item.id}
